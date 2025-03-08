@@ -7,6 +7,7 @@
  */
 package thinclab.models.IPOMDP;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -27,7 +28,7 @@ import thinclab.utils.Utils;
  * @author adityas
  *
  */
-public class MjThetaSpace implements Frame<PolicyNode> {
+public class MjThetaSpace implements Frame<PolicyNode>, Serializable {
 
     final public int frame;
     final public PolicyGraph G;

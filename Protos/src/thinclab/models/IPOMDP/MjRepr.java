@@ -7,13 +7,15 @@
  */
 package thinclab.models.IPOMDP;
 
+import java.io.Serializable;
+
 import thinclab.utils.Tuple;
 
 /*
  * @author adityas
  *
  */
-public class MjRepr<M> extends Tuple<Integer, M> {
+public class MjRepr<M> extends Tuple<Integer, M> implements Serializable {
 
 	final public int frame;
 	final public M m;

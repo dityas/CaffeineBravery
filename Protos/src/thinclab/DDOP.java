@@ -752,11 +752,11 @@ public class DDOP {
             return 0;
 
         var _vars = new HashSet<Integer>(vars);
-        var _computation = Tuple.of(dd1, dd2, _vars);
+//        var _computation = Tuple.of(dd1, dd2, _vars);
 
-        var result = Global.dotProductCache.get(_computation);
-        if (result != null)
-            return result;
+//        var result = Global.dotProductCache.get(_computation);
+//        if (result != null)
+//            return result;
 
         // dd1 precedes dd2
         if (dd1.getVar() > dd2.getVar()) {
@@ -768,7 +768,7 @@ public class DDOP {
                 dp += DDOP.dotProduct(dd1.getChildren()[i], dd2, _vars);
             }
 
-            Global.dotProductCache.put(_computation, dp);
+//            Global.dotProductCache.put(_computation, dp);
             return dp;
         }
 
@@ -781,7 +781,7 @@ public class DDOP {
 
                 dp += DDOP.dotProduct(dd2.getChildren()[i], dd1, _vars);
             }
-            Global.dotProductCache.put(_computation, dp);
+//            Global.dotProductCache.put(_computation, dp);
             return dp;
         }
 
@@ -791,27 +791,9 @@ public class DDOP {
             _vars.remove(dd1.getVar());
             float dp = 0;
             for (int i = 0; i < dd1.getChildren().length; i++) {
-
-                // try {
                 dp += DDOP.dotProduct(dd1.getChildren()[i], dd2.getChildren()[i], _vars);
-                // }
-                // catch (Exception e) {
-
-                // LOGGER.debug(String.format("DD1 is %s", Arrays.toString(dd1.getChildren())));
-                // LOGGER.debug(String.format("DD2 is %s", Arrays.toString(dd2.getChildren())));
-                // LOGGER.debug(String.format("Children are %s and %s and _vars are %s",
-                // dd1.getChildren().length, dd2.getChildren().length, _vars));
-                // LOGGER.debug(String.format("Root vars are %s and %s",
-                // Global.varNames.get(dd1.getVar() - 1), Global.varNames.get(dd2.getVar()-1)));
-                // LOGGER.debug(String.format("Children are %s and %s",
-                // Global.valNames.get(dd1.getVar() - 1), Global.valNames.get(dd2.getVar() -
-                // 1)));
-
-                // e.printStackTrace();
-                // System.exit(-1);
-                // }
             }
-            Global.dotProductCache.put(_computation, dp);
+//            Global.dotProductCache.put(_computation, dp);
             return dp;
         }
 

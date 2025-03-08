@@ -105,6 +105,19 @@ public class Global {
 		Global.populateFromRandomVariables(primedVars);
 	}
 
+    public static Tuple3<List<Integer>, List<String>, List<List<String>>> getVarsTuple() {
+
+        return Tuple.of(varDomSize, varNames, valNames);
+    }
+
+    public static void loadFromVarsTuple(
+            Tuple3<List<Integer>, List<String>, List<List<String>>> vars) {
+            
+        varDomSize = vars._0();
+        varNames = vars._1();
+        valNames = vars._2();
+    }
+
 	public static void clearHashtables() {
 
 		LOGGER.warn("Clearing caches. This will reduce performance");
@@ -227,113 +240,6 @@ public class Global {
 
         return _jsonArray;
     }
-
-//	public static List<Tuple<Tuple<Integer, ReachabilityNode>, DD>> decoupleMj(DD b, int i_Mj) {
-//
-//		var varSet = b.getVars();
-//
-//		if (!Global.modelVars.containsKey(Global.varNames.get(i_Mj - 1))) {
-//
-//			LOGGER.error(String.format("Var %s index %s passed to decoupleMj does not look like a modelvar",
-//					Global.varNames.get(i_Mj - 1), i_Mj));
-//
-//			System.exit(-1);
-//			return null;
-//		}
-//
-//		else if (varSet.size() == 0 || varSet.last() == i_Mj || !varSet.contains(i_Mj)) {
-//
-//			var mjVals = IntStream
-//					.range(0,
-//							b.getChildren().length)
-//					.boxed().filter(b_ -> !b
-//							.getChildren()[b_]
-//									.equals(DD.zero))
-//					.map(i -> Tuple.of(Global.modelVars.get(Global.varNames.get(i_Mj - 1)).entrySet().stream()
-//							.filter(kv -> kv.getValue() == Global.valNames.get(i_Mj - 1).get(i)).map(kv -> kv.getKey())
-//							.findFirst().get(), b.getChildren()[i]))
-//					.collect(Collectors.toList());
-//
-//			return mjVals;
-//		}
-//
-//		else {
-//
-//			LOGGER.error(String.format("%s has to be at the top of the DD.", i_Mj));
-//			System.exit(-1);
-//			return null;
-//		}
-//	}
-//
-//	public static Tuple<Set<Tuple<Integer, ReachabilityNode>>, Set<Tuple<Integer, ReachabilityNode>>> pruneModels(DD b,
-//			int i_Mj) {
-//
-//		if (b.getVar() != i_Mj) {
-//
-//			LOGGER.error(String.format("Var %s in DD %s is not a model var", Global.varNames.get(b.getVar() - 1), b));
-//			System.exit(-1);
-//		}
-//
-//		var allModels = Global.modelVars.get(Global.varNames.get(i_Mj - 1)).entrySet().stream()
-//				.filter(e -> e.getKey()._1().h == 1).map(e ->
-//					{ // Get actual model from Mj value
-//
-//						var m = e.getKey();
-//						var mv = e.getValue();
-//
-//						int index = Collections.binarySearch(Global.valNames.get(i_Mj - 1), mv);
-//
-//						if (index < 0) {
-//
-//							LOGGER.error(
-//									String.format("Could not find model %s in %s", mv, Global.valNames.get(i_Mj - 1)));
-//							System.exit(-1);
-//						}
-//
-//						return Tuple.of(m, b.getChildren()[index].getVal());
-//					})
-//				.collect(Collectors.toList());
-//
-//		var validModels = allModels.stream().filter(m ->
-//			{ // Remove all models with P(mj) < 0.01
-//
-//				if (m._1() >= 0.0f)
-//					return true;
-//
-//				else {
-//
-//					LOGGER.info(String.format("Pruning model %s with probability %s", m._0(), m._1()));
-//					return false;
-//				}
-//			}).map(m -> m._0()).collect(Collectors.toSet());
-//
-//		var invalidModels = allModels.stream().map(m -> m._0()).filter(m -> !validModels.contains(m))
-//				.collect(Collectors.toSet());
-//
-//		var errorModels = allModels.stream()
-//				.filter(m -> !(validModels.contains(m._0()) || invalidModels.contains(m._0())))
-//				.collect(Collectors.toList());
-//
-//		if (errorModels.size() > 0) {
-//
-//			errorModels.forEach(m ->
-//				{
-//
-//					LOGGER.error(String.format("Model %s with P(mj)=%s is not in valid models or pruned models", m._0(),
-//							m._1()));
-//				});
-//
-//			System.exit(-1);
-//		}
-//
-//		else
-//			LOGGER.info("Model pruning verified successfully.");
-//
-//		LOGGER.info(String.format("Pruned a total of %s models from %s models of the opponent", invalidModels.size(),
-//				allModels.size()));
-//
-//		return Tuple.of(validModels, invalidModels);
-//	}
 
 	public static DD assemblebMj(int i_Mj, List<Tuple<Tuple<Integer, ReachabilityNode>, DD>> mjs,
 			Set<Tuple<Integer, ReachabilityNode>> lowProbModels) {

@@ -7,9 +7,10 @@
  */
 package thinclab.executables;
 
+import java.io.FileOutputStream;
+import java.io.ObjectOutputStream;
 import java.util.List;
 
-import com.google.gson.JsonObject;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -20,12 +21,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import thinclab.legacy.Global;
-import thinclab.models.POMDP;
 import thinclab.models.IPOMDP.IPOMDP;
 import thinclab.policy.AlphaVectorPolicy;
 import thinclab.solver.SymbolicPerseusSolver;
 import thinclab.spuddx_parser.SpuddXMainParser;
-import thinclab.utils.Utils;
 
 /*
  * @author adityas
@@ -38,78 +37,100 @@ public class GetPolicy {
 
 	public static void main(String[] args) throws Exception {
 
-		CommandLineParser cliParser = new DefaultParser();
-		Options opt = new Options();
-		
-		opt.addOption("h", false, "print help");
-		opt.addOption("pomdp", false, "solve for POMDP");
-		opt.addOption("ipomdp", false, "solve for IPOMDP");
-		opt.addOption("d", true, "path to the SPUDDX file");
-		opt.addOption("b", true, "name of the initial belief DD");
-		opt.addOption("m", true, "name of the POMDP/IPOMDP");
-		opt.addOption("p", true, "path to the file to store the policy");
+        CommandLineParser cliParser = new DefaultParser();
+        Options opt = new Options();
 
-		CommandLine line = null;
-		line = cliParser.parse(opt, args);
+        opt.addOption("h", false, "print help");
+        opt.addOption("biased", false, "model biased attacker");
+        opt.addOption("d", true, "path to the SPUDDX file");
+        opt.addOption("iBel", true, 
+                "name of the initial belief DD of agent i");
+        opt.addOption("iName", true, "name of agent i");
+        opt.addOption("o", true, "output directory");
+        opt.addOption("b", true, "DDs to serialize");
+
+        CommandLine line = null;
+        line = cliParser.parse(opt, args);
 
         if (line.hasOption("h")) {
             new HelpFormatter().printHelp(" ", opt);
             System.exit(0);
         }
-		
-		String domainFile = line.getOptionValue("d");
-		String modelName = line.getOptionValue("m");
-        String biName = line.getOptionValue("b");
-        String policyFile = line.getOptionValue("p");
 
-		// Parse SPUDDX file
-		var parser = new SpuddXMainParser(domainFile);
-		parser.run();
+        if (line.hasOption("biased"))
+            Global.MODEL_BIASED = true;
 
-        // Solve POMDP
-        if (line.hasOption("pomdp")) {
-            var I = (POMDP) parser.getModel(modelName).orElseGet(() ->
-			{
-				LOGGER.error("Model %s not found", modelName);
-				System.exit(-1);
-				return null;
-			});
+        String domainFile = line.getOptionValue("d");
+        String outputDir = line.getOptionValue("o");
 
-            var b_i = parser.getDD(biName);
-            if (b_i == null) {
-                LOGGER.error("Belief DD %s does not exist", biName);
-                System.exit(-1);
-            }
+        String iName = line.getOptionValue("iName");
+        String iBel = line.getOptionValue("iBel");
 
-    		var solver = new SymbolicPerseusSolver<POMDP>(I);
-	    	var policy = solver.solve(List.of(b_i), 100, 10);
+        String[] ddNames = {};
 
-            var _json = new JsonObject();
-            _json.add("variables", Global.toJson());
-            _json.add("policy", policy.toJson());
+        if (line.hasOption("b"))
+            ddNames = line.getOptionValue("b").split(",");
 
-            Utils.writeJsonToFile(_json, policyFile);
-        }
-        
+        // Parse SPUDDX file
+        var parser = new SpuddXMainParser(domainFile);
+        parser.run();
+
+        LOGGER.info("Parsed domain file");
+
+        // Get the agent model
+        var model = (IPOMDP) parser.getModel(iName).orElseGet(() ->
+                {
+                    LOGGER.error("Model %s not found", iName);
+                    throw new RuntimeException("Model not found error");
+                });
+
+        var b_i = parser.getDD(iBel);
+        b_i = model.getECDDFromMjDD(b_i);
+
         // Solve IPOMDP
-        if (line.hasOption("ipomdp")) {
-            var I = (IPOMDP) parser.getModel(modelName).orElseGet(() ->
-			{
-				LOGGER.error("Model %s not found", modelName);
-				System.exit(-1);
-				return null;
-			});
+        AlphaVectorPolicy p = new SymbolicPerseusSolver<>(model)
+            .solve(List.of(b_i), 100, 20);
 
-            var b_i = parser.getDD(biName);
-            if (b_i == null) {
-                LOGGER.error("Belief DD %s does not exist", biName);
-                System.exit(-1);
-            }
+        String policyFile = String.format("%s/%s.policy", outputDir, iName);
+        String varFile = String.format("%s/%s.vars", outputDir, iName);
+        String modelFile = String.format("%s/%s.model", outputDir, iName);
+        String modelVarsFile = String.format("%s/%s.mvars", outputDir, iName);
 
-    		var solver = new SymbolicPerseusSolver<IPOMDP>(I);
-	    	var policy = solver.solve(List.of(b_i), 100, I.H);
+        LOGGER.info("Writing policy to %s", policyFile);
+        var oos = new ObjectOutputStream(new FileOutputStream(policyFile));
+        oos.writeObject(p);
+        oos.close();
 
-            Utils.writeJsonToFile(policy.toJson(), policyFile);
+        LOGGER.info("Writing vars to %s", varFile);
+        oos = new ObjectOutputStream(new FileOutputStream(varFile));
+        oos.writeObject(Global.getVarsTuple());
+        oos.close();
+
+        LOGGER.info("Writing model to %s", modelFile);
+        oos = new ObjectOutputStream(new FileOutputStream(modelFile));
+        oos.writeObject(model);
+        oos.close();
+
+        LOGGER.info("Writing model vars to %s", modelVarsFile);
+        oos = new ObjectOutputStream(new FileOutputStream(modelVarsFile));
+        oos.writeObject(Global.modelVars);
+        oos.close();
+
+        // Serialize DDs
+        String ddFile = String.format("%s/%s.dd", outputDir, iBel);
+        LOGGER.info("Writing DD to %s", ddFile);
+        oos = new ObjectOutputStream(new FileOutputStream(ddFile));
+        oos.writeObject(b_i);
+        oos.close();
+
+        for (int j = 0; j < ddNames.length; j++) {
+
+            var dd = parser.getDD(ddNames[j]);
+            ddFile = String.format("%s/%s.dd", outputDir, ddNames[j]);
+            LOGGER.info("Writing DD to %s", ddFile);
+            oos = new ObjectOutputStream(new FileOutputStream(ddFile));
+            oos.writeObject(dd);
+            oos.close();
         }
 	}
 }

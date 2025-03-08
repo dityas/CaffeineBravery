@@ -7,6 +7,7 @@
  */
 package thinclab.models.IPOMDP;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Collection;
@@ -17,6 +18,7 @@ import java.util.stream.IntStream;
 import java.util.function.Predicate;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
 import thinclab.DDOP;
 import thinclab.RandomVariable;
 import thinclab.legacy.DD;
@@ -38,7 +40,7 @@ import thinclab.utils.Tuple3;
  * @author adityas
  *
  */
-public class IPOMDP extends PBVISolvablePOMDPBasedModel {
+public class IPOMDP extends PBVISolvablePOMDPBasedModel implements Serializable {
 
     public final int H;
 

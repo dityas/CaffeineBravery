@@ -33,14 +33,8 @@ import thinclab.utils.Tuple;
 public class AlphaVectorPolicy extends ArrayList<AlphaVector> implements 
 Policy<DD>, Jsonable, LispExpressible {
 
-    //    public List<Tuple<Integer, DD>> aVecs;
-    //
     private static final Logger LOGGER = 
         LogManager.getFormatterLogger(AlphaVectorPolicy.class);
-    //
-    //    public AlphaVectorPolicy(List<Tuple<Integer, DD>> alphaVectors) {
-    //        this.aVecs = alphaVectors;
-    //    }
 
     public final List<Integer> stateIndices;
 
@@ -60,6 +54,32 @@ Policy<DD>, Jsonable, LispExpressible {
         return stream()
             .map(v -> v.getVector())
             .collect(Collectors.toList());
+    }
+
+    public int getBestVectorIndex(DD b) {
+
+        float maxVal = Float.NEGATIVE_INFINITY;
+        int bestIndex = -1;
+
+        for (int i = 0; i < this.size(); i++) {
+
+            float val = DDOP.dotProduct(b, 
+                    this.get(i).getVector(), stateIndices);
+
+            if (val > maxVal) {
+
+                maxVal = val;
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex < 0) {
+            LOGGER.error("Error while getting best action at %s", b);
+            throw new RuntimeException(
+                    String.format("Could not find best vec for %s", b));
+        }
+
+        return bestIndex;
     }
 
     public static AlphaVectorPolicy getLowerBound(PBVISolvablePOMDPBasedModel m) {

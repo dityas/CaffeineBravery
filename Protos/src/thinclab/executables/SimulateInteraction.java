@@ -1,6 +1,8 @@
 
 package thinclab.executables;
 
+import java.io.FileOutputStream;
+import java.io.ObjectOutputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +22,7 @@ import thinclab.models.PBVISolvablePOMDPBasedModel;
 import thinclab.models.IPOMDP.IPOMDP;
 import thinclab.models.datastructures.PolicyGraph;
 import thinclab.policy.AlphaVectorPolicy;
+import thinclab.policy.BoltzmannExplorationPolicy;
 import thinclab.simulator.SimulationSerializer;
 import thinclab.simulator.Simulator;
 import thinclab.solver.SymbolicPerseusSolver;
@@ -93,6 +96,7 @@ public class SimulateInteraction {
                 "(solve) for computing it online");
         opt.addOption("l", true, "length of the interaction");
         opt.addOption("i", true, "number of interactions");
+        opt.addOption("c", true, "confidence for quantal response model");
 
         CommandLine line = null;
         line = cliParser.parse(opt, args);
@@ -111,9 +115,14 @@ public class SimulateInteraction {
         Global.RESULTS_DIR = Path.of(resultsDir);
 
         String iName = line.getOptionValue("iName");
-        String jName = line.getOptionValue("jName");
         String iBel = line.getOptionValue("iBel");
-        String jBel = line.getOptionValue("jBel");
+
+        String[] jName = line.getOptionValue("jName").split(",");
+        String[] jBel = line.getOptionValue("jBel").split(",");
+
+        if (jName.length != jBel.length)
+            throw new RuntimeException("Agents and beliefs do not match for j");
+
         String iState = line.getOptionValue("iState");
         int l = Integer.parseInt(line.getOptionValue("l"));
         int i = Integer.parseInt(line.getOptionValue("i"));
@@ -136,37 +145,8 @@ public class SimulateInteraction {
                     throw new RuntimeException("Model not found error");
                 });
 
-        // Get the opponent model
-        var jModel = model.framesj.stream()
-            .filter(_m -> _m._1().getName().equals(jName))
-            .findFirst()
-            .map(_m -> _m._1()).get();
-
-        // Get opponent policy
-        var jPolicy = model.ecThetas.stream()
-            .filter(_p -> _p.m.getName().equals(jName))
-            .findFirst()
-            .map(_p -> _p.Vn).get();
-
-        // Get initial beliefs and starting state
         var b_i = parser.getDD(iBel);
-        var b_j = parser.getDD(jBel);
-        var s = parser.getDD(iState);
-
-        if (b_i == null) {
-            LOGGER.error("Belief DD %s does not exist", iBel);
-            System.exit(-1);
-        }
-
-        if (b_j == null) {
-            LOGGER.error("Belief DD %s does not exist", jBel);
-            System.exit(-1);
-        }
-
-        // Map beliefs to equivalence classes if we are dealing with IPOMDPs
         b_i = model.getECDDFromMjDD(b_i);
-        b_j = jModel instanceof IPOMDP _jModel ?
-            _jModel.getECDDFromMjDD(b_j) : b_j;
 
         // Solve or load policy
         if (line.getOptionValue("p") != null) {
@@ -183,29 +163,74 @@ public class SimulateInteraction {
             Utils.serializePolicyGraph(G, model.getName());
         }
 
-        // Run the interaction
-        var stateIndices = new ArrayList<>(model.i_S());
-        stateIndices.remove(stateIndices.size() - 1);
+        var oos = new ObjectOutputStream(new FileOutputStream("out.obj"));
+        oos.writeObject(model);
+        oos.close();
 
-        var sim = new Simulator(stateIndices,
-                model.i_A, jModel.i_A, 
-                model.i_Om_p(), jModel.i_Om_p(), 
-                model.T(), model.O(), jModel.O());
+        var confidence = line.getOptionValue("c");
 
-        for (int n = 0; n < i; n++) {
-            LOGGER.info("Running interaction %s", n);
+        for (int j = 0; j < jBel.length; j++) {
 
-            // For recording the interaction
-            var recorder = new SimulationSerializer(model, jModel);
-            runMultiAgentInteraction(sim, model, jModel, p, jPolicy, 
-                    s, b_i, b_j, l, recorder);
+            // Get the opponent model
+            final int jIdx = j;
+            var jModel = model.framesj.stream()
+                .filter(_m -> _m._1().getName().equals(jName[jIdx]))
+                .findFirst()
+                .map(_m -> _m._1()).get();
 
-            // Write the interaction to a file
-            if (Global.RESULTS_DIR != null) {
-                String fileName = String.format("%s/trace.%s.json", 
-                        Global.RESULTS_DIR, n);
-                LOGGER.info("Recording interaction %s to %s", n, fileName);
-                Utils.writeJsonToFile(recorder.recorder, fileName);
+            // Get opponent policy
+            var jPolicy = model.ecThetas.stream()
+                .filter(_p -> _p.m.getName().equals(jName[jIdx]))
+                .findFirst()
+                .map(_p -> _p.Vn).get();
+
+            if (confidence != null)
+                jPolicy = new BoltzmannExplorationPolicy(
+                        jPolicy, jPolicy.stateIndices, Float.parseFloat(confidence));
+
+            // Get initial beliefs and starting state
+            var b_j = parser.getDD(jBel[j]);
+            var s = parser.getDD(iState);
+
+            if (b_i == null) {
+                LOGGER.error("Belief DD %s does not exist", iBel);
+                System.exit(-1);
+            }
+
+            if (b_j == null) {
+                LOGGER.error("Belief DD %s does not exist", jBel[j]);
+                System.exit(-1);
+            }
+
+            // Map beliefs to equivalence classes if we are dealing with IPOMDPs
+            b_j = jModel instanceof IPOMDP _jModel ?
+                _jModel.getECDDFromMjDD(b_j) : b_j;
+
+
+            // Run the interaction
+            var stateIndices = new ArrayList<>(model.i_S());
+            stateIndices.remove(stateIndices.size() - 1);
+
+            var sim = new Simulator(stateIndices,
+                    model.i_A, jModel.i_A, 
+                    model.i_Om_p(), jModel.i_Om_p(), 
+                    model.T(), model.O(), jModel.O());
+
+            for (int n = 0; n < i; n++) {
+                LOGGER.info("Running interaction %s", n);
+
+                // For recording the interaction
+                var recorder = new SimulationSerializer(model, jModel);
+                runMultiAgentInteraction(sim, model, jModel, p, jPolicy, 
+                        s, b_i, b_j, l, recorder);
+
+                // Write the interaction to a file
+                if (Global.RESULTS_DIR != null) {
+                    String fileName = String.format("%s/trace.%s.%s.json", 
+                            Global.RESULTS_DIR, jName[j], n);
+                    LOGGER.info("Recording interaction %s to %s", n, fileName);
+                    Utils.writeJsonToFile(recorder.recorder, fileName);
+                }
             }
         }
     }

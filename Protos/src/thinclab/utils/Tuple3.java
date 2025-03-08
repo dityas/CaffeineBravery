@@ -7,13 +7,15 @@
  */
 package thinclab.utils;
 
+import java.io.Serializable;
+
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
 /*
  * @author adityas
  *
  */
-public class Tuple3<A, B, C> {
+public class Tuple3<A, B, C> implements Serializable {
 
 	private final A _0;
 	private final B _1;

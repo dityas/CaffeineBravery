@@ -7,6 +7,7 @@
  */
 package thinclab.models;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,7 +30,7 @@ import thinclab.utils.Tuple3;
  * @author adityas
  *
  */
-public class POMDP extends PBVISolvablePOMDPBasedModel {
+public class POMDP extends PBVISolvablePOMDPBasedModel implements Serializable {
 
 
     private static final Logger LOGGER = 

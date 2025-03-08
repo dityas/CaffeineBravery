@@ -7,6 +7,7 @@
  */
 package thinclab.models.datastructures;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -22,7 +23,7 @@ import thinclab.legacy.DD;
  * @author adityas
  *
  */
-public class ReachabilityNode {
+public class ReachabilityNode implements Serializable {
 
 	public int alphaId;
 	public Set<DD> beliefs;

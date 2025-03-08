@@ -7,6 +7,7 @@
  */
 package thinclab.solver;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -29,7 +30,7 @@ import thinclab.utils.Tuple;
  */
 public class 
 SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
-    implements PointBasedSolver<AlphaVectorPolicy> {
+    implements PointBasedSolver<AlphaVectorPolicy>, Serializable {
 
     private int usedBeliefs = 0;
     public final M m;
@@ -91,7 +92,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
 
         beliefSamplingWeights = DDOP.getBeliefRegionEvalDiff(B, UB, Vn);
 
-        while (true && newVn.size() <= 30) {
+        while (true && newVn.size() <= 60) {
 
             var index = DDOP.sample(beliefSamplingWeights);
             if (index < 0)
@@ -105,6 +106,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
             beliefSamplingWeights.set(index, 0.0f);
 
             var newAlpha = m.backup(b, Vn, g);
+            newAlpha.witness = b; // record witness
 
             // Construct V_{n+1}(b)
             float bestVal = Float.NEGATIVE_INFINITY;
@@ -122,11 +124,14 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
             }
 
             // If new \alpha.b >= Vn(b) add it to new V
-            if (newAlpha.getVal() >= bestVal)
+            if (newAlpha.getVal() >= bestVal) {
                 newVn.add(newAlpha);
+            }
 
-            else
+            else {
+                best.witness = b;
                 newVn.add(best);
+            }
 
             markUpdatedBeliefs(B, newVn);
             this.usedBeliefs++;
@@ -217,7 +222,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
 
         int convergenceCount = 0;
         var Vn_p = UB;
-        for (int i = 0; i < 500; i++) {
+        for (int i = 0; i < 300; i++) {
 
             long then = System.nanoTime();
             int VnSize = Vn.size();
@@ -243,7 +248,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
             if (bellmanError < 0.01 && i > 10) {
 
                 convergenceCount += 1;
-                if (convergenceCount > 5) {
+                if (convergenceCount > 9) {
 
                     LOGGER.info("Declaring solution at Bellman error %s "
                             + "and iteration %s", bellmanError, i);
@@ -274,10 +279,10 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
         LOGGER.info("[*] Finished solving %s", m.getName());
 
         // Print if approximation can be done
-        for (var vec: Vn) {
-            if (DDOP.canApproximate(vec.getVector()))
-                LOGGER.warn("A solution DD can be easily approximated");
-        }
+//        for (var vec: Vn) {
+//            if (DDOP.canApproximate(vec.getVector()))
+//                LOGGER.warn("A solution DD can be easily approximated");
+//        }
 
         return Vn;
     }

@@ -7,6 +7,8 @@
  */
 package thinclab.models.datastructures;
 
+import java.io.Serializable;
+
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -16,7 +18,7 @@ import thinclab.utils.Jsonable;
  * @author adityas
  *
  */
-public class PolicyNode implements Jsonable {
+public class PolicyNode implements Jsonable, Serializable {
 
 	public String actName;
 	public int alphaId;
