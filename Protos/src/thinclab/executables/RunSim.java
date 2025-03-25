@@ -1,11 +1,15 @@
 
 package thinclab.executables;
 
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.HashMap;
 
 
 import org.apache.commons.cli.CommandLine;
@@ -18,23 +22,27 @@ import org.apache.logging.log4j.Logger;
 
 import thinclab.legacy.DD;
 import thinclab.legacy.Global;
+import thinclab.legacy.TypedCacheMap;
 import thinclab.models.PBVISolvablePOMDPBasedModel;
 import thinclab.models.IPOMDP.IPOMDP;
 import thinclab.models.datastructures.PolicyGraph;
+import thinclab.models.IPOMDP.MjRepr;
+import thinclab.models.datastructures.ReachabilityNode;
 import thinclab.policy.AlphaVectorPolicy;
 import thinclab.policy.BoltzmannExplorationPolicy;
 import thinclab.simulator.SimulationSerializer;
 import thinclab.simulator.Simulator;
 import thinclab.solver.SymbolicPerseusSolver;
 import thinclab.spuddx_parser.SpuddXMainParser;
+import thinclab.utils.Tuple3;
 import thinclab.utils.Utils;
 
 
-public class SimulateInteraction {
+public class RunSim {
 
 
     private static final Logger LOGGER = 
-        LogManager.getFormatterLogger(SimulateInteraction.class);
+        LogManager.getFormatterLogger(RunSim.class);
 
     public static void runMultiAgentInteraction(Simulator sim,
             final IPOMDP agentI,
@@ -81,7 +89,7 @@ public class SimulateInteraction {
 
         opt.addOption("h", false, "print help");
         opt.addOption("biased", false, "model biased attacker");
-        opt.addOption("d", true, "path to the SPUDDX file");
+        opt.addOption("o", true, "dir containing serialized models");
         opt.addOption("r", true, "results dir");
         opt.addOption("iBel", true, 
                 "name of the initial belief DD of agent i");
@@ -91,9 +99,6 @@ public class SimulateInteraction {
                 "name of the initial state DD");
         opt.addOption("iName", true, "name of agent i");
         opt.addOption("jName", true, "name of agent j");
-        opt.addOption("p", true, 
-                "path to the JSON file to store the policy " +
-                "(solve) for computing it online");
         opt.addOption("l", true, "length of the interaction");
         opt.addOption("i", true, "number of interactions");
         opt.addOption("c", true, "confidence for quantal response model");
@@ -109,7 +114,7 @@ public class SimulateInteraction {
         if (line.hasOption("biased"))
             Global.MODEL_BIASED = true;
 
-        String domainFile = line.getOptionValue("d");
+        String serializedDir = line.getOptionValue("o");
         String resultsDir = line.getOptionValue("r");
 
         Global.RESULTS_DIR = Path.of(resultsDir);
@@ -120,52 +125,55 @@ public class SimulateInteraction {
         String[] jName = line.getOptionValue("jName").split(",");
         String[] jBel = line.getOptionValue("jBel").split(",");
 
-        if (jName.length != jBel.length)
+        // Load from serialized
+        // Load vars
+        String varsFile = String.format("%s/%s.vars", serializedDir, iName);
+        var ois = new ObjectInputStream(new FileInputStream(varsFile));
+        var vars = (Tuple3<List<Integer>, List<String>, List<List<String>>>) ois.readObject();
+        Global.loadFromVarsTuple(vars);
+
+        // Load modelvars
+        String mvarsFile = String.format("%s/%s.mvars", serializedDir, iName);
+        ois = new ObjectInputStream(new FileInputStream(mvarsFile));
+        var mvars = (HashMap<String, HashMap<MjRepr<ReachabilityNode>, String>>) ois.readObject();
+        Global.modelVars = mvars;
+
+        // Load model
+        String modelFile = String.format("%s/%s.model", serializedDir, iName);
+        ois = new ObjectInputStream(new FileInputStream(modelFile));
+        IPOMDP model = (IPOMDP) ois.readObject();
+
+        // Load start belief
+        String b_iFile = String.format("%s/%s.dd", serializedDir, iBel);
+        ois = new ObjectInputStream(new FileInputStream(b_iFile));
+        DD b_i = (DD) ois.readObject();
+
+        // Load policy
+        String policyFile = String.format("%s/%s.policy", serializedDir, iName);
+        ois = new ObjectInputStream(new FileInputStream(policyFile));
+        AlphaVectorPolicy p = (AlphaVectorPolicy) ois.readObject();
+
+        // Load other beliefs
+        var jDDs = new ArrayList<DD>();
+        for (int j = 0; j < jBel.length; j++) {
+            String b_jFile = String.format("%s/%s.dd", serializedDir, jBel[j]);
+            ois = new ObjectInputStream(new FileInputStream(b_jFile));
+            DD b_j = (DD) ois.readObject();
+            jDDs.add(b_j);
+        }
+
+        if (jName.length != jBel.length - 1)
             throw new RuntimeException("Agents and beliefs do not match for j");
 
-        String iState = line.getOptionValue("iState");
         int l = Integer.parseInt(line.getOptionValue("l"));
         int i = Integer.parseInt(line.getOptionValue("i"));
 
-
-        // Multi-agent interaction
-
-        // Parse SPUDDX file
-        var parser = new SpuddXMainParser(domainFile);
-        parser.run();
-
-        LOGGER.info("Parsed domain file");
-
-        AlphaVectorPolicy p = null;
-
-        // Get the agent model
-        var model = (IPOMDP) parser.getModel(iName).orElseGet(() ->
-                {
-                    LOGGER.error("Model %s not found", iName);
-                    throw new RuntimeException("Model not found error");
-                });
-
-        var b_i = parser.getDD(iBel);
-        b_i = model.getECDDFromMjDD(b_i);
-
-        // Solve or load policy
-        if (line.getOptionValue("p") != null) {
-            if (line.getOptionValue("p").equals("solve"))
-                p = new SymbolicPerseusSolver<>(model)
-                    .solve(List.of(b_i), 100, 20);
-
-            else
-                p = AlphaVectorPolicy.fromJson(
-                        Utils.readJsonFromFile(
-                            line.getOptionValue("p")));
-
-            var G = PolicyGraph.makePolicyGraph(List.of(b_i), model, p);
-            Utils.serializePolicyGraph(G, model.getName());
-        }
+//        var G = PolicyGraph.makePolicyGraph(List.of(b_i), model, p);
+//        Utils.serializePolicyGraph(G, model.getName());
 
         var confidence = line.getOptionValue("c");
 
-        for (int j = 0; j < jBel.length; j++) {
+        for (int j = 0; j < jBel.length - 1; j++) {
 
             // Get the opponent model
             final int jIdx = j;
@@ -186,8 +194,10 @@ public class SimulateInteraction {
                         jModel.A.size());
 
             // Get initial beliefs and starting state
-            var b_j = parser.getDD(jBel[j]);
-            var s = parser.getDD(iState);
+            var b_j = jDDs.get(j);
+            b_j = jModel instanceof IPOMDP _jModel ?
+                _jModel.getECDDFromMjDD(b_j) : b_j;
+            var s = jDDs.get(jDDs.size() - 1);
 
             if (b_i == null) {
                 LOGGER.error("Belief DD %s does not exist", iBel);
@@ -198,11 +208,6 @@ public class SimulateInteraction {
                 LOGGER.error("Belief DD %s does not exist", jBel[j]);
                 System.exit(-1);
             }
-
-            // Map beliefs to equivalence classes if we are dealing with IPOMDPs
-            b_j = jModel instanceof IPOMDP _jModel ?
-                _jModel.getECDDFromMjDD(b_j) : b_j;
-
 
             // Run the interaction
             var stateIndices = new ArrayList<>(model.i_S());

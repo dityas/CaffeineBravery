@@ -7,6 +7,7 @@
  */
 package thinclab.policy;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -31,7 +32,7 @@ import thinclab.utils.Tuple;
  *
  */
 public class AlphaVectorPolicy extends ArrayList<AlphaVector> implements 
-Policy<DD>, Jsonable, LispExpressible {
+Policy<DD>, Jsonable, LispExpressible, Serializable {
 
     private static final Logger LOGGER = 
         LogManager.getFormatterLogger(AlphaVectorPolicy.class);

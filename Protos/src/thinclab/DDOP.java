@@ -1104,8 +1104,10 @@ public class DDOP {
                 if (children[childId] instanceof DDleaf l)
                     sum += l.val;
 
-                else
+                else {
                     LOGGER.error("Something seriously wrong with sampling");
+                    LOGGER.error(dd);
+                }
             }
 
             float randomVal = Global.random.nextFloat() * sum;

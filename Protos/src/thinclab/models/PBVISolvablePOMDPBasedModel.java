@@ -7,6 +7,7 @@
  */
 package thinclab.models;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,23 +29,23 @@ import thinclab.utils.Tuple3;
  *
  */
 public abstract class PBVISolvablePOMDPBasedModel implements 
-PBVISolvable, POSeqDecMakingModel<DD> {
+PBVISolvable, POSeqDecMakingModel<DD>, Serializable {
 
-    public final List<String> S;
-    public final List<String> O;
-    public final List<String> A;
-    public final float discount;
+    public List<String> S;
+    public List<String> O;
+    public List<String> A;
+    public float discount;
 
-    public final List<Integer> i_S;
-    public final List<Integer> i_Om;
-    public final int i_A;
+    public List<Integer> i_S;
+    public List<Integer> i_Om;
+    public int i_A;
 
-    public final List<Integer> i_S_p;
-    public final List<Integer> i_Om_p;
-    public final List<List<Integer>> oAll;
+    public List<Integer> i_S_p;
+    public List<Integer> i_Om_p;
+    public List<List<Integer>> oAll;
 
-    public final List<List<DD>> TF;
-    public final List<List<DD>> OF;
+    public List<List<DD>> TF;
+    public List<List<DD>> OF;
     public List<DD> R;
 
     public String name;
@@ -56,6 +57,9 @@ PBVISolvable, POSeqDecMakingModel<DD> {
         new TypedCacheMap<>(1000);
     private static final Logger LOGGER = 
         LogManager.getFormatterLogger(PBVISolvablePOMDPBasedModel.class);
+
+    // Deserialization constructor
+    public PBVISolvablePOMDPBasedModel() {}
 
     public PBVISolvablePOMDPBasedModel(List<String> S, 
             List<String> O, String A,

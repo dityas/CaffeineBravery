@@ -7,7 +7,9 @@
  */
 package thinclab.executables;
 
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.List;
 
@@ -25,6 +27,7 @@ import thinclab.models.IPOMDP.IPOMDP;
 import thinclab.policy.AlphaVectorPolicy;
 import thinclab.solver.SymbolicPerseusSolver;
 import thinclab.spuddx_parser.SpuddXMainParser;
+import thinclab.utils.Tuple3;
 
 /*
  * @author adityas
@@ -34,6 +37,26 @@ public class GetPolicy {
 
     private static final Logger LOGGER = 
         LogManager.getFormatterLogger(GetPolicy.class);
+
+    public static void verifyVars(
+            Tuple3<List<Integer>, List<String>, List<List<String>>> vars) {
+
+        var varDoms = vars._0();
+        for (int i = 0; i < varDoms.size(); i++) {
+
+            if (!varDoms.get(i).equals(Global.varDomSize.get(i)))
+                throw new RuntimeException(String.format(
+                            "Saved: %s, Loaded: %s",
+                            varDoms.get(i), Global.varDomSize.get(i)));
+        }
+
+        var varNames = vars._1();
+        for (int i = 0; i < varNames.size(); i++) {
+
+            if (!varNames.get(i).equals(Global.varNames.get(i)))
+                throw new RuntimeException("Vars not verified");
+        }
+    }
 
 	public static void main(String[] args) throws Exception {
 
@@ -101,10 +124,16 @@ public class GetPolicy {
         oos.writeObject(p);
         oos.close();
 
+        // Serialize vars
         LOGGER.info("Writing vars to %s", varFile);
         oos = new ObjectOutputStream(new FileOutputStream(varFile));
         oos.writeObject(Global.getVarsTuple());
         oos.close();
+
+        var ois = new ObjectInputStream(new FileInputStream(varFile));
+        var vars = (Tuple3<List<Integer>, List<String>, List<List<String>>>) ois.readObject();
+        ois.close();
+        verifyVars(vars);
 
         LOGGER.info("Writing model to %s", modelFile);
         oos = new ObjectOutputStream(new FileOutputStream(modelFile));

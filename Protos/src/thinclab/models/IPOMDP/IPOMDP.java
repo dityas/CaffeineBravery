@@ -42,30 +42,30 @@ import thinclab.utils.Tuple3;
  */
 public class IPOMDP extends PBVISolvablePOMDPBasedModel implements Serializable {
 
-    public final int H;
+    public int H;
 
-    public final List<String> Aj;
-    public final int i_Aj;
-    public final int i_Mj;
-    public final int i_Mj_p;
-    public final int i_EC;
-    public final int i_EC_p;
-    public final int i_Thetaj;
-    public final List<String> Thetaj;
+    public List<String> Aj;
+    public int i_Aj;
+    public int i_Mj;
+    public int i_Mj_p;
+    public int i_EC;
+    public int i_EC_p;
+    public int i_Thetaj;
+    public List<String> Thetaj;
 
-    public final List<Integer> mjVars;
+    public List<Integer> mjVars;
 
-    public final List<String> Omj;
+    public List<String> Omj;
 
-    public final List<Integer> i_Omj;
-    public final List<Integer> i_Omj_p;
+    public List<Integer> i_Omj;
+    public List<Integer> i_Omj_p;
 
-    public final List<Integer> allvars;
-    public final List<Integer> gaoivars;
+    public List<Integer> allvars;
+    public List<Integer> gaoivars;
 
-    public final List<DD> jointR;
+    public List<DD> jointR;
 
-    public final List<List<DD>> Oj;
+    public List<List<DD>> Oj;
 
     public DD PAjGivenEC;
     public DD PEC_pGivenECAjOj_p;
@@ -79,9 +79,10 @@ public class IPOMDP extends PBVISolvablePOMDPBasedModel implements Serializable 
     public HashMap<MjRepr<PolicyNode>, String> ECMap = new HashMap<>();
     public HashMap<String, String> mjToECMap = new HashMap<>();
 
+    private static final long serialVersionUID = 1L;
+
     private static final Logger LOGGER = 
         LogManager.getFormatterLogger(IPOMDP.class);
-
 
     public IPOMDP(IPOMDP i) {
 

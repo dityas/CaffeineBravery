@@ -7,6 +7,8 @@
  */
 package thinclab.policy;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -27,36 +29,58 @@ public class BoltzmannExplorationPolicy extends AlphaVectorPolicy {
         LogManager.getFormatterLogger(BoltzmannExplorationPolicy.class);
 
     private final float conf;
+    private final int A;
 
-    public BoltzmannExplorationPolicy(List<Integer> stateIndices, float conf) {
+    public BoltzmannExplorationPolicy(List<Integer> stateIndices, float conf,
+            int A) {
         super(stateIndices);
         this.conf = conf;
+        this.A = A;
     }
 
     public BoltzmannExplorationPolicy(Collection<AlphaVector> alphaVectors,
-            List<Integer> stateIndices, float conf) {
+            List<Integer> stateIndices, float conf, int A) {
         super(alphaVectors, stateIndices);
         this.conf = conf;
+        this.A = A;
     }
 
     @Override
     public int getBestActionIndex(DD belief) {
 
-        var vals = this.stream()
-            .map(v -> DDOP.dotProduct(belief, v.getVector(), stateIndices) * conf)
-            .map(v -> (float) Math.exp(v))
-            .collect(Collectors.toList());
+        var Q = new float[A];
+        for (int q = 0; q < Q.length; q++)
+            Q[q] = Float.NEGATIVE_INFINITY;
 
-        var sum = vals.stream().reduce(0.0f, (a, b) -> a + b);
-        var probs = vals.stream().map(v -> v / sum).collect(Collectors.toList());
+        for (var v: this) {
 
-        var best = DDOP.sample(probs);
-        LOGGER.debug("Sampled action with prob %s", probs.get(best));
+            var val = DDOP.dotProduct(belief, v.getVector(), stateIndices);
+            val = (float) Math.exp(val * conf);
+            int a = v.getActId();
 
-        if (best == -1)
-            throw new RuntimeException("Could not sample an action");
+            if (Q[a] < val)
+                Q[a] = val;
+        }
 
-        return this.get(best).getActId();
+        float minQ = Float.POSITIVE_INFINITY;
+        for (int q = 0; q < Q.length; q++) {
+            if (Q[q] < minQ && Q[q] != Float.NEGATIVE_INFINITY)
+                minQ = Q[q];
+        }
+
+        for (int q = 0; q < Q.length; q++) {
+            if (Q[q] == Float.NEGATIVE_INFINITY && minQ != Float.POSITIVE_INFINITY)
+                Q[q] = minQ;
+        }
+
+        ArrayList<Float> Qfn = new ArrayList<Float>();
+        for (int q = 0; q < Q.length; q++)
+            Qfn.add(Q[q]);
+
+        var best = DDOP.sample(Qfn);
+        LOGGER.debug("Sampled %s from %s", best, Qfn);
+
+        return best;
     }
 
 }

@@ -37,7 +37,7 @@ public class Global {
 
     public static boolean MODEL_BIASED = false;
 
-	public static TypedCacheMap<String, HashMap<MjRepr<ReachabilityNode>, String>> modelVars = new TypedCacheMap<>();
+	public static HashMap<String, HashMap<MjRepr<ReachabilityNode>, String>> modelVars = new HashMap<>();
 
 	public static int NUM_VARS = 0;
 
@@ -116,6 +116,7 @@ public class Global {
         varDomSize = vars._0();
         varNames = vars._1();
         valNames = vars._2();
+        Global.NUM_VARS = varNames.size();
     }
 
 	public static void clearHashtables() {
