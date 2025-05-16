@@ -3,6 +3,9 @@ package thinclab.simulator;
 
 import java.util.List;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
@@ -12,6 +15,7 @@ import thinclab.models.PBVISolvablePOMDPBasedModel;
 import thinclab.models.POMDP;
 import thinclab.models.IPOMDP.IPOMDP;
 import thinclab.models.datastructures.Observation;
+import thinclab.policy.AlphaVectorPolicy;
 import thinclab.utils.Jsonable;
 
 public class SimulationSerializer implements Jsonable {
@@ -23,6 +27,9 @@ public class SimulationSerializer implements Jsonable {
 
     public final PBVISolvablePOMDPBasedModel agentI;
     public final PBVISolvablePOMDPBasedModel agentJ;
+
+    private static final Logger LOGGER = LogManager.getFormatterLogger(
+            SimulationSerializer.class);
 
     public JsonArray recorder = new JsonArray();
 
@@ -73,11 +80,18 @@ public class SimulationSerializer implements Jsonable {
     }
 
     public JsonObject buildAgentJson(PBVISolvablePOMDPBasedModel agent,
-            DD belief, int action, Observation obs) {
+            DD belief, int action, Observation obs, AlphaVectorPolicy policy) {
     
         var beliefJSON = beliefStateToJson(agent, belief);
         beliefJSON.addProperty("action", agent.A().get(action));
         beliefJSON.add("observation", obs.toJson());
+        beliefJSON.addProperty("value",
+                DDOP.bestAlphaIndexWithValue(policy, belief)._1());
+        beliefJSON.addProperty("reward",
+                DDOP.dotProduct(agent.R.get(action), belief, agent.i_S));
+
+        LOGGER.info("%s took action %s and got obs %s", agent.getName(),
+                agent.A().get(action), obs.toJson());
         
         return beliefJSON;
     }
@@ -96,11 +110,12 @@ public class SimulationSerializer implements Jsonable {
     public void recordStep(DD state, List<Integer> stateIndices,
             DD beliefI, DD beliefJ,
             int actionI, int actionJ,
-            Observation obsI, Observation obsJ) {
+            Observation obsI, Observation obsJ,
+            AlphaVectorPolicy iPolicy, AlphaVectorPolicy jPolicy) {
 
         var stateJSON = DDOP.toJson(state, stateIndices).getAsJsonObject();
-        var agentIJSON = buildAgentJson(agentI, beliefI, actionI, obsI);
-        var agentJJSON = buildAgentJson(agentJ, beliefJ, actionJ, obsJ);
+        var agentIJSON = buildAgentJson(agentI, beliefI, actionI, obsI, iPolicy);
+        var agentJJSON = buildAgentJson(agentJ, beliefJ, actionJ, obsJ, jPolicy);
 
         recordStep(stateJSON, agentIJSON, agentJJSON);
 

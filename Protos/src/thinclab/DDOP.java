@@ -746,17 +746,25 @@ public class DDOP {
 
     // ------------------------------------------------------------------------------------------------
 
+    public static float factoredExpectation(DD dd1, DD dd2, List<Integer> vars) {
+
+        float val = 0.0f;
+        var fdd1 = DDOP.factors(dd1, vars);
+        var fdd2 = DDOP.factors(dd2, vars);
+
+        for (int i = 0; i < vars.size(); i++) {
+            val += DDOP.dotProduct(fdd1.get(i), fdd2.get(i), List.of(vars.get(i)));
+        }
+
+        return val;
+    }
+
     public static float dotProduct(DD dd1, DD dd2, Collection<Integer> vars) {
 
         if ((dd1.getVar() == 0 && dd1.getVal() == 0) || (dd2.getVar() == 0 && dd2.getVal() == 0))
             return 0;
 
         var _vars = new HashSet<Integer>(vars);
-//        var _computation = Tuple.of(dd1, dd2, _vars);
-
-//        var result = Global.dotProductCache.get(_computation);
-//        if (result != null)
-//            return result;
 
         // dd1 precedes dd2
         if (dd1.getVar() > dd2.getVar()) {
@@ -768,7 +776,6 @@ public class DDOP {
                 dp += DDOP.dotProduct(dd1.getChildren()[i], dd2, _vars);
             }
 
-//            Global.dotProductCache.put(_computation, dp);
             return dp;
         }
 
@@ -781,7 +788,6 @@ public class DDOP {
 
                 dp += DDOP.dotProduct(dd2.getChildren()[i], dd1, _vars);
             }
-//            Global.dotProductCache.put(_computation, dp);
             return dp;
         }
 
@@ -793,7 +799,6 @@ public class DDOP {
             for (int i = 0; i < dd1.getChildren().length; i++) {
                 dp += DDOP.dotProduct(dd1.getChildren()[i], dd2.getChildren()[i], _vars);
             }
-//            Global.dotProductCache.put(_computation, dp);
             return dp;
         }
 
@@ -1050,10 +1055,10 @@ public class DDOP {
             if ((sums[i] / sum) < r)
                 continue;
 
-            else
-                return i;
+            return i;
         }
 
+        LOGGER.error("Error in sampling from %s", dist);
         return -1;
     }
 

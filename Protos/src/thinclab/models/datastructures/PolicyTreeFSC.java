@@ -42,7 +42,7 @@ public class PolicyTreeFSC {
 
     public PolicyTreeFSC(final List<DD> beliefs,
             final PBVISolvablePOMDPBasedModel ipomdp,
-            final AlphaVectorPolicy Vn, final int maxDepth) {
+            final AlphaVectorPolicy Vn, int maxDepth) {
 
         LOGGER.info("Making approximate FSC for IPOMDP %s for horizon %s",
                 ipomdp.getName(), maxDepth);
@@ -51,7 +51,14 @@ public class PolicyTreeFSC {
         LOGGER.info("Observation space for %s is %s", ipomdp.getName(),
                 observationSpace.size());
 
-        makePolicyTree(beliefs, ipomdp, maxDepth, Vn);
+        if (observationSpace.size() > 5) {
+            maxDepth = (int) Math.ceil(Math.log(5000.0) / 
+                    Math.log((double) observationSpace.size()));
+
+            LOGGER.info("Changing max depth to %s", maxDepth);
+        }
+        makePolicyTree(beliefs, ipomdp, maxDepth + 1, Vn);
+        //makeTrees(beliefs, ipomdp, maxDepth, Vn);
         LOGGER.info("Policy tree for %s contains %s nodes", ipomdp.getName(),
                 this.nodeId);
         makeFSC(ipomdp.oAll);
@@ -214,6 +221,63 @@ public class PolicyTreeFSC {
                     adjMap.get(n).put(o, to);
             }
         }
+    }
+
+    public int makePolicyTreeDFS(DD belief, int depth,
+            final PBVISolvablePOMDPBasedModel ipomdp,
+            final AlphaVectorPolicy Vn) {
+
+        var n = nextNodeId(); // node id
+        
+        int bestAction = Vn.getBestActionIndex(belief);
+        int alphaId = DDOP.bestAlphaIndex(Vn, belief);
+
+        // Make new node
+        PolicyNode pnode = new PolicyNode(alphaId, bestAction, "");
+        if (true)
+            pnode.start = true;
+
+        pnode.nodeId = n;
+        nodeMap.put(n, pnode);
+
+        if (depth <= 0) {
+            for (var obs: ipomdp.oAll)
+                updateFSC(n, obs, -1);
+
+            return n;
+        }
+
+        else {
+            // Update belief for all possible observations
+            var likelihoods = ipomdp.obsLikelihoods(belief, bestAction);
+            for (var obs: ipomdp.oAll) {
+
+                var prob = DDOP.restrict(likelihoods,
+                        ipomdp.i_Om_p(), obs).getVal();
+
+                // If observation is impossible for this belief, skip it
+                if (prob < 1e-6f) 
+                    continue;
+                
+                // Add new belief for action bestAction and observation obs
+                // to the beliefsQueue
+                var nextBelief = ipomdp.beliefUpdate(belief, bestAction, obs);
+                var nextId = makePolicyTreeDFS(nextBelief, depth - 1, ipomdp, Vn);
+
+                // Record policy tree edge
+                updateFSC(n, obs, nextId);
+            }
+
+            return n;
+        }
+    }
+
+    public void makeTrees(final List<DD> beliefs,
+            final PBVISolvablePOMDPBasedModel ipomdp,
+            final int maxDepth, final AlphaVectorPolicy Vn) {
+
+        for (var b: beliefs)
+            makePolicyTreeDFS(b, maxDepth, ipomdp, Vn);
     }
 
     public void makePolicyTree(final List<DD> beliefs,

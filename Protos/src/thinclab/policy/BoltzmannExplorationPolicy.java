@@ -8,10 +8,8 @@
 package thinclab.policy;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -50,7 +48,7 @@ public class BoltzmannExplorationPolicy extends AlphaVectorPolicy {
 
         var Q = new float[A];
         for (int q = 0; q < Q.length; q++)
-            Q[q] = Float.NEGATIVE_INFINITY;
+            Q[q] = 0.0f;
 
         for (var v: this) {
 
@@ -62,24 +60,15 @@ public class BoltzmannExplorationPolicy extends AlphaVectorPolicy {
                 Q[a] = val;
         }
 
-        float minQ = Float.POSITIVE_INFINITY;
-        for (int q = 0; q < Q.length; q++) {
-            if (Q[q] < minQ && Q[q] != Float.NEGATIVE_INFINITY)
-                minQ = Q[q];
-        }
-
-        for (int q = 0; q < Q.length; q++) {
-            if (Q[q] == Float.NEGATIVE_INFINITY && minQ != Float.POSITIVE_INFINITY)
-                Q[q] = minQ;
-        }
+        float sum = 0f;
+        for (int q = 0; q < Q.length; q++)
+            sum += Q[q];
 
         ArrayList<Float> Qfn = new ArrayList<Float>();
         for (int q = 0; q < Q.length; q++)
-            Qfn.add(Q[q]);
+            Qfn.add(Q[q] / sum);
 
         var best = DDOP.sample(Qfn);
-        LOGGER.debug("Sampled %s from %s", best, Qfn);
-
         return best;
     }
 

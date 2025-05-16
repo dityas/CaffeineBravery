@@ -34,7 +34,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
 
     private int usedBeliefs = 0;
     public final M m;
-    public final AlphaVectorPolicy UB;
+    public AlphaVectorPolicy UB;
 
     public AlphaVectorPolicy Vn;
     public List<Float> beliefSamplingWeights;
@@ -47,14 +47,6 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
         this.m = m;
         LOGGER.info("Initialized symbolic Perseus for %s", this.m.getName());
 
-        // initialize lower bound as the reward function
-        Vn = AlphaVectorPolicy.getLowerBound(m);
-
-        // solve upper bound
-        UB = QMDPSolver.solveQMDP(this.m);
-        var actionSet = UB.getActions(this.m);
-        LOGGER.info("UB for %s contains actions %s", 
-                this.m.getName(), actionSet);
     }
 
     /*
@@ -178,13 +170,56 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
                 + "the toxicity of my city of my city.");
     }
 
+    public float evalPolicy(final List<DD> B, AlphaVectorPolicy Vn) {
+
+
+        var totalVal = 0.0f;
+        for (var b: B) {
+
+            var vec = Vn.getBestVectorIndex(b);
+            totalVal += DDOP.dotProduct(Vn.get(vec).getVector(), b, m.i_S());
+        }
+
+        var policyValue = totalVal / B.size();
+        LOGGER.info("[+] V_pi(B) = %s", policyValue);
+
+        return policyValue;
+    }
+
     @Override
     public AlphaVectorPolicy solve(final List<DD> b_is, int I, int H) {
+
+        AlphaVectorPolicy bestPolicy = null;
+        float bestVal = Float.NEGATIVE_INFINITY;
+
+        for (int i = 0; i < 3; i++) {
+
+            var Vn = solveOnce(b_is, I, H);
+            float val = evalPolicy(b_is, Vn);
+
+            if (val > bestVal) {
+                LOGGER.info("V_pi'(B) = %s > V_pi(B) = %s. Replacing", val, bestVal);
+                bestVal = val;
+                bestPolicy = Vn;
+            }
+            System.gc();
+        }
+
+        return bestPolicy;
+    }
+
+    public AlphaVectorPolicy solveOnce(final List<DD> b_is, int I, int H) {
 
         if (b_is.size() < 1) {
             LOGGER.error("[!] No initial beliefs. Returning upper bound");
             return UB;
         }
+
+        // solve upper bound
+        UB = QMDPSolver.solveQMDP(this.m);
+        var actionSet = UB.getActions(this.m);
+        LOGGER.info("UB for %s contains actions %s", 
+                this.m.getName(), actionSet);
 
         // QMDP policy's estimate of initial beliefs
         var ubVals = b_is.stream()
@@ -192,6 +227,9 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
             .map(v -> Tuple.of(m.A().get(v._0().getActId()), v._1()))
             .collect(Collectors.toList());
         LOGGER.info("UB evaulates initial beliefs at %s", ubVals);
+
+        // initialize lower bound as the reward function
+        Vn = AlphaVectorPolicy.getLowerBound(m);
 
         var lbVals = b_is.stream()
             .map(b -> DDOP.bestAlphaWithValue(Vn, b))
@@ -206,7 +244,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
         exitIfBeliefsInvalid(b_is);
 
         // Belief exploration based on QMDP approximation
-        var explorationProb = 0.05f;
+        var explorationProb = 0.1f;
         var ES = new MDPExploration<M>(UB, explorationProb);
         LOGGER.info("[+] Starting with exploration probability %s and %s initial beliefs", 
                 explorationProb, b_is.size());
@@ -236,16 +274,18 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
             var bellmanError = getBellmanError(B, Vn, Vn_p);
             var UBError = getBellmanError(B, Vn, UB);
 
-            LOGGER.info("i=%2d, t=%.3f sec, |Vn|=%2d, |B|=%3d/%3d, "
-                    + "bell err: %.3f, UB err: %.3f",
-                    i, backupT, Vn_p.size(), usedBeliefs, B.size(),
-                    bellmanError, UBError);
+            if (i % 10 == 0) {
+                LOGGER.info("i=%2d, t=%.3f sec, |Vn|=%2d, |B|=%3d/%3d, "
+                        + "bell err: %.3f, UB err: %.3f",
+                        i, backupT, Vn_p.size(), usedBeliefs, B.size(),
+                        bellmanError, UBError);
+            }
 
             // Prepare for next backup
             Vn = Vn_p;
 
             // Congergence check
-            if (bellmanError < 0.01 && i > 10) {
+            if (bellmanError < 0.001 && i > 10) {
 
                 convergenceCount += 1;
                 if (convergenceCount > 9) {
@@ -267,8 +307,8 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
         Global.clearHashtablesIfFull();
         m.clearBackupCache();
         ES.clearCaches();
-        System.gc();
         exploredSpace.removeAllNodes();
+        System.gc();
 
         // Log exit
         LOGGER.info("Vn contains actions %s", Vn.getActions(m));
@@ -276,6 +316,18 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
             .map(v -> Tuple.of(m.A().get(v.getActId()), v.getVal()))
             .collect(Collectors.toList());
         LOGGER.info("Vn values at witness points are %s", valsAtWitnesses);
+        for (var v: Vn) {
+            LOGGER.info("a: %s", m.A().get(v.getActId()));
+            LOGGER.info("V: %s", DDOP.toJson(v.getVector(), m.i_S()));
+            LOGGER.info("b: %s", DDOP.toJson(v.getWitness(), m.i_S()));
+            LOGGER.info("V(b): %s",
+                    DDOP.dotProduct(v.getVector(), v.getWitness(), m.i_S()));
+            LOGGER.info("factored expectation: %s",
+                    DDOP.factoredExpectation(v.getVector(), v.getWitness(), m.i_S()));
+            LOGGER.info("Sum[b, v]: %s",
+                    DDOP.addMultVarElim(List.of(v.getVector(), v.getWitness()),
+                        m.i_S()));
+        }
         LOGGER.info("[*] Finished solving %s", m.getName());
 
         // Print if approximation can be done

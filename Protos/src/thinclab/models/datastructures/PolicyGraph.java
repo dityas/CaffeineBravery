@@ -10,6 +10,7 @@ package thinclab.models.datastructures;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -126,6 +127,64 @@ public class PolicyGraph implements Jsonable, Serializable {
         return null;
     }
 
+    public void makeGraphFromSims(List<DD> beliefs,
+            PBVISolvablePOMDPBasedModel m,
+            AlphaVectorPolicy Vn) {
+
+        for (var startBelief: beliefs) {
+
+            var beliefSet = new ArrayList<DD>();
+            beliefSet.add(startBelief);
+            for (int h = 0; h < 1000; h++) {
+
+                if (beliefSet.isEmpty())
+                    break;
+
+                var b = beliefSet.remove(0);
+                var i = Vn.getBestVectorIndex(b);
+                var v = Vn.get(i);
+                var bestAction = v.getActId();
+                LOGGER.info("At node %s for action %s with value %s",
+                        i, m.A().get(bestAction), DDOP.dotProduct(v.getVector(), b, m.i_S()));
+
+                if (nodeMap.containsKey(i))
+                    continue;
+
+                // Make policy node
+                var n = new PolicyNode(i, bestAction, m.A().get(bestAction));
+                n.nodeId = i;
+                nodeMap.put(i, n);
+
+                // For all o, link with best node
+                var likelihoods = m.obsLikelihoods(b, bestAction);
+                for (var o: m.oAll) {
+
+                    var edgeIdx = edgeMap.get(Tuple.of(bestAction, o));
+                    var prob = DDOP.restrict(likelihoods, m.i_Om_p(), o).getVal();
+                    // If o is impossible, loop back to i
+                    if (prob < 1e-6)
+                        updateAgjMap(i, edgeIdx, i);
+
+                    else { // Link to best vector for updated belief
+                        var nextBelief = m.beliefUpdate(b, bestAction, o);
+                        int bestNode = Vn.getBestVectorIndex(nextBelief);
+
+                        if (!adjMap.containsKey(i) || !adjMap.get(i).containsKey(edgeIdx))
+                            updateAgjMap(i, edgeIdx, bestNode);
+                        
+                        if (beliefSet.size() < 300)
+                            beliefSet.add(nextBelief);
+                    }
+                }
+            }
+        }
+
+        for (var b: beliefs) {
+            int bestVec = Vn.getBestVectorIndex(b);
+            nodeMap.get(bestVec).start = true;
+        }
+    }
+
     public void makeFSC(List<DD> beliefs, PBVISolvablePOMDPBasedModel m,
             AlphaVectorPolicy Vn) {
 
@@ -196,15 +255,17 @@ public class PolicyGraph implements Jsonable, Serializable {
 
         // Make empty policy graph
         var G = new PolicyGraph(m, p);
-        G.makeFSC(b_is, m, p);
+        //G.makeFSC(b_is, m, p);
+        G.makeGraphFromSims(b_is, m, p);
+        if(PolicyGraph.verify(m, b_is, G, p, 10, 100))
+            return G;
 
-//        var t = new PolicyTreeFSC(b_is, m, p, 6);
-//        G.convertToTree(t, m);
-        PolicyGraph.verify(m, b_is, G, p, 10, 100);
+        var t = new PolicyTreeFSC(b_is, m, p, 8);
+        G.convertToTree(t, m);
         return G;
     }
 
-    public static void verify(PBVISolvablePOMDPBasedModel m, final List<DD> B,
+    public static boolean verify(PBVISolvablePOMDPBasedModel m, final List<DD> B,
             PolicyGraph G, AlphaVectorPolicy Vn, int maxLen, int numIter) {
 
         LOGGER.info("[.] Verifying PolicyGraph FSC with rollouts");
@@ -229,14 +290,7 @@ public class PolicyGraph implements Jsonable, Serializable {
                                 m.i_S());
                         LOGGER.error("[!!!] FSC diverges at iter %s step %s: Vn: %s / FSC: %s | Vn: %s / FSC: %s",
                                 i, l, m.A().get(bestAct), m.A().get(node.actId), VnVal, FSCVal);
-//                        LOGGER.debug("Belief point: %s",
-//                                DDOP.factors(belief, m.i_S()));
-//                        LOGGER.debug("FSC suggests %s", m.A().get(node.actId));
-//                        LOGGER.debug("FSC evaluates at %s", FSCVal);
-//                        LOGGER.debug("Vn suggests %s", m.A().get(bestAct));
-//                        LOGGER.debug("Vn evaluates at %s", VnVal);
-                        // throw new RuntimeException("Could not make policy graph");
-                        break;
+                        return false;
                     }
 
                     // sample observation for rollout
@@ -254,6 +308,7 @@ public class PolicyGraph implements Jsonable, Serializable {
 
         LOGGER.info("[+] PolicyGraph verified with %s rollouts of len %s",
                 numIter, maxLen);
+        return true;
     }
 
     public void convertToTree(PolicyTreeFSC t, PBVISolvablePOMDPBasedModel m) {

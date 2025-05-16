@@ -7,7 +7,13 @@
  */
 package thinclab.models.IPOMDP;
 
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -63,7 +69,14 @@ public class MjThetaSpace implements Frame<PolicyNode>, Serializable {
         else
             b_js.addAll(b_j);
 
-        this.Vn = s.solve(b_js, 100, 10);
+        var policy = getPolicy(b_js, m);
+        if (policy != null) {
+            LOGGER.info("[*] Loaded policy for %s", m.getName());
+            Vn = policy;
+        }
+
+        else Vn = solvePolicy(b_js, m);
+
         this.G = PolicyGraph.makePolicyGraph(b_js, m, Vn);
 
         LOGGER.debug(
@@ -74,6 +87,51 @@ public class MjThetaSpace implements Frame<PolicyNode>, Serializable {
                 frame, G.adjMap.size());
 
         Utils.serializePolicyGraph(G, m.getName());
+    }
+
+    public AlphaVectorPolicy solvePolicy(List<DD> b_j,
+            PBVISolvablePOMDPBasedModel m) {
+
+        var modelPath = Global.RESULTS_DIR.toAbsolutePath().toString();
+        var policyFile = String.format("%s/%s.policy", modelPath, m.getName());
+        var policy = s.solve(b_j, 100, 10);
+
+        try {
+            var oos = new ObjectOutputStream(new FileOutputStream(policyFile));
+            oos.writeObject(policy);
+            oos.close();
+            LOGGER.info("[*] Policy for %s serialized in %s",
+                    m.getName(), policyFile);
+        } catch (Exception e) {
+            LOGGER.error("[!] Could not store in %s", policyFile);
+            LOGGER.error("[!] %s", e.getMessage());
+        }
+
+        return policy;
+    }
+
+    public AlphaVectorPolicy getPolicy(List<DD> b_j,
+            PBVISolvablePOMDPBasedModel m) {
+
+        var modelPath = Global.RESULTS_DIR.toAbsolutePath().toString();
+        var policyFile = String.format("%s/%s.policy", modelPath, m.getName());
+
+        try {
+            if (Files.exists(Path.of(policyFile))) {
+                var ois = new ObjectInputStream(new FileInputStream(policyFile));
+                var policy = (AlphaVectorPolicy) ois.readObject();
+                ois.close();
+
+                return policy;
+            }
+
+            else return null;
+        } catch (Exception e) {
+            LOGGER.error("[!] Could not open %s", policyFile);
+            LOGGER.error("[!] %s", e.getMessage());
+
+            return null;
+        }
     }
 
     @Override

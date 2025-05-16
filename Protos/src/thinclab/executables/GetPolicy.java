@@ -11,6 +11,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.file.Path;
 import java.util.List;
 
 
@@ -24,10 +25,12 @@ import org.apache.logging.log4j.Logger;
 
 import thinclab.legacy.Global;
 import thinclab.models.IPOMDP.IPOMDP;
+import thinclab.models.datastructures.PolicyGraph;
 import thinclab.policy.AlphaVectorPolicy;
 import thinclab.solver.SymbolicPerseusSolver;
 import thinclab.spuddx_parser.SpuddXMainParser;
 import thinclab.utils.Tuple3;
+import thinclab.utils.Utils;
 
 /*
  * @author adityas
@@ -86,6 +89,8 @@ public class GetPolicy {
         String domainFile = line.getOptionValue("d");
         String outputDir = line.getOptionValue("o");
 
+        Global.RESULTS_DIR = Path.of(outputDir);
+
         String iName = line.getOptionValue("iName");
         String iBel = line.getOptionValue("iBel");
 
@@ -113,6 +118,9 @@ public class GetPolicy {
         // Solve IPOMDP
         AlphaVectorPolicy p = new SymbolicPerseusSolver<>(model)
             .solve(List.of(b_i), 100, 20);
+
+        var G = PolicyGraph.makePolicyGraph(List.of(b_i), model, p);
+        Utils.serializePolicyGraph(G, model.getName());
 
         String policyFile = String.format("%s/%s.policy", outputDir, iName);
         String varFile = String.format("%s/%s.vars", outputDir, iName);

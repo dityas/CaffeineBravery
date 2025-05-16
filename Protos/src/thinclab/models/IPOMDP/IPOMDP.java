@@ -27,6 +27,7 @@ import thinclab.legacy.DDnode;
 import thinclab.legacy.Global;
 import thinclab.models.Model;
 import thinclab.models.PBVISolvablePOMDPBasedModel;
+import thinclab.models.datastructures.Observation;
 import thinclab.models.datastructures.PolicyGraph;
 import thinclab.models.datastructures.PolicyNode;
 import thinclab.models.datastructures.ReachabilityGraph;
@@ -741,7 +742,11 @@ public class IPOMDP extends PBVISolvablePOMDPBasedModel implements Serializable 
 
         if (DDOP.abs(DDOP.sub(prob, DD.zero)).getVal() < 1e-6) {
             LOGGER.error("Zero probability observation");
-            return DDleaf.getDD(Float.NaN);
+            LOGGER.error("Belief was %s", DDOP.toJson(b, i_S()));
+            LOGGER.error("Action %s", A().get(a));
+            LOGGER.error("Got observation %s",
+                    new Observation(Tuple.of(i_Om_p(), o)).toJson());
+            throw new RuntimeException("P(o|b) = 0");
         }
 
         b_p = DDOP.div(b_p, prob);
@@ -839,7 +844,7 @@ public class IPOMDP extends PBVISolvablePOMDPBasedModel implements Serializable 
     public float getWeight(DD likelihoods, DD prediction) {
 
         float sum = DDOP.l1Norm(likelihoods, prediction);
-        return 2.0f / (1.0f + sum);
+        return 1.0f / (1.0f + sum);
     }
 
     public List<DD> getWeightedEvidence(DD predictedB, List<DD> OFao) {
@@ -849,6 +854,7 @@ public class IPOMDP extends PBVISolvablePOMDPBasedModel implements Serializable 
 
             var ofaoVars = ofao.getVars();
             var vars = new ArrayList<>(i_S_p());
+            vars.add(i_Aj);
             vars.removeAll(ofaoVars);
 
             var w = getWeight(
@@ -887,13 +893,13 @@ public class IPOMDP extends PBVISolvablePOMDPBasedModel implements Serializable 
 		var vars = new ArrayList<Integer>(factors.size());
 		vars.addAll(i_S());
 		vars.add(i_Thetaj);
-		// vars.add(i_Aj);
+		//vars.add(i_Aj);
 
         var b_p = DDOP.addMultVarElim(factors, vars);
-		var stateVars = new ArrayList<Integer>(i_S());
+		//var stateVars = new ArrayList<Integer>(i_S());
 
-        var _vars = new ArrayList<>(i_S_p());
-        _vars.add(i_Aj);
+        //var _vars = new ArrayList<>(i_S_p());
+        //_vars.add(i_Aj);
         
         // compute evidence weight
         var wOFao = getWeightedEvidence(b_p, OFao);
@@ -902,7 +908,7 @@ public class IPOMDP extends PBVISolvablePOMDPBasedModel implements Serializable 
         b_p = DDOP.addMultVarElim(wOFao, List.of(i_Aj));
 		b_p = DDOP.primeVars(b_p, -(Global.NUM_VARS / 2));
 		
-        var prob = DDOP.addMultVarElim(List.of(b_p), stateVars);
+        var prob = DDOP.addMultVarElim(List.of(b_p), i_S());
 
 		if (DDOP.abs(DDOP.sub(prob, DD.zero)).getVal() < 1e-6) {
             LOGGER.error("Zero probability observation");

@@ -2,12 +2,14 @@
 package thinclab.executables;
 
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.HashMap;
-
+import java.util.List;
+import java.util.Scanner;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -17,26 +19,168 @@ import org.apache.commons.cli.Options;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import thinclab.DDOP;
 import thinclab.legacy.DD;
 import thinclab.legacy.Global;
 import thinclab.models.PBVISolvablePOMDPBasedModel;
 import thinclab.models.IPOMDP.IPOMDP;
 import thinclab.models.IPOMDP.MjRepr;
+import thinclab.models.datastructures.PolicyGraph;
 import thinclab.models.datastructures.ReachabilityNode;
 import thinclab.policy.AlphaVectorPolicy;
 import thinclab.policy.BoltzmannExplorationPolicy;
 import thinclab.simulator.SimulationSerializer;
 import thinclab.simulator.Simulator;
 import thinclab.solver.SymbolicPerseusSolver;
+import thinclab.spuddx_parser.SpuddXMainParser;
 import thinclab.utils.Tuple3;
 import thinclab.utils.Utils;
 
 
-public class RunSim {
+public class SimBeliefUpdate {
 
 
     private static final Logger LOGGER = 
-        LogManager.getFormatterLogger(RunSim.class);
+        LogManager.getFormatterLogger(SimBeliefUpdate.class);
+
+    // -----------------------------------------------------------------------
+    // Confirmation bias test for IPOMDPs
+
+//    public List<DD> evidenceFactors(DD o) {
+//
+//        var vars = new ArrayList<>(o.getVars());
+//        return vars.size() > 1 ? 
+//            DDOP.factors(o, vars) : vars.size() == 1 ? 
+//            List.of(o) : List.of();
+//    }
+//
+//    public float getWeight(List<DD> OFaoFactors, List<DD> b_pFactors) {
+//
+//        float sum = 0.0f;
+//
+//        for (var f : OFaoFactors) {
+//
+//            var vars = f.getVars();
+//            
+//            if (vars.size() == 1) {
+//                // Because of the variable ordering, the required var 
+//                // will always be at the var index - (# unprimed vars) 
+//                // in the array the -1 is to index the var in Globals.
+//
+//                int varIndex = vars.first() 
+//                        - 1 - (Global.NUM_VARS / 2);
+//
+//                if (varIndex < 0)
+//                    varIndex = b_pFactors.size() - 1;
+//
+//                var p = b_pFactors.get(varIndex);
+//                sum += DDOP.l2NormSq(
+//                        p, f, 
+//                        Global.valNames.get(vars.first() - 1).size());
+//            }
+//        }
+//
+//        return 1.0f / (1.0f + sum);
+//    }
+//
+//    public float getWeight(DD likelihoods, DD prediction) {
+//
+//        float sum = DDOP.l1Norm(likelihoods, prediction);
+//        return 2.0f / (1.0f + sum);
+//    }
+//
+//    public List<DD> getWeightedEvidence(DD predictedB, List<DD> OFao) {
+//
+//        var weighted = new ArrayList<DD>(OFao.size());
+//        for (var ofao : OFao) {
+//
+//            var ofaoVars = ofao.getVars();
+//            var vars = new ArrayList<>(i_S_p());
+//            vars.removeAll(ofaoVars);
+//
+//            var w = getWeight(
+//                    ofao, 
+//                    DDOP.addMultVarElim(List.of(predictedB), vars));
+//            weighted.add(DDOP.pow(ofao, w));
+//        }
+//
+//        return weighted;
+//    }
+//
+//    public List<DD> getWeightedEvidence(List<DD> p, List<DD> OFao) {
+//
+//        var weighted = new ArrayList<DD>(OFao.size());
+//        for (var ofao : OFao) {
+//            var w = getWeight(evidenceFactors(ofao), p);
+//            var _w = DDOP.pow(ofao, w);
+//            weighted.add(_w);
+//        }
+//
+//        return weighted;
+//    }
+//
+//    public DD beliefUpdateBiased(DD b, int a, List<Integer> o) {
+//
+//        var OFao = DDOP.restrict(this.OF.get(a), i_Om_p, o);
+//
+//		var factors = new ArrayList<DD>(S().size() + S().size() + Omj.size() + 3);
+//
+//		factors.add(b);
+//		factors.add(PAjGivenEC);
+//		factors.add(PThetajGivenEC);
+//		factors.add(Taus.get(a));
+//		factors.addAll(T().get(a));
+//
+//		var vars = new ArrayList<Integer>(factors.size());
+//		vars.addAll(i_S());
+//		vars.add(i_Thetaj);
+//		// vars.add(i_Aj);
+//
+//        var b_p = DDOP.addMultVarElim(factors, vars);
+//		var stateVars = new ArrayList<Integer>(i_S());
+//
+//        var _vars = new ArrayList<>(i_S_p());
+//        _vars.add(i_Aj);
+//        
+//        // compute evidence weight
+//        var wOFao = getWeightedEvidence(b_p, OFao);
+//
+//        wOFao.add(b_p);
+//        b_p = DDOP.addMultVarElim(wOFao, List.of(i_Aj));
+//		b_p = DDOP.primeVars(b_p, -(Global.NUM_VARS / 2));
+//		
+//        var prob = DDOP.addMultVarElim(List.of(b_p), stateVars);
+//
+//		if (DDOP.abs(DDOP.sub(prob, DD.zero)).getVal() < 1e-6) {
+//            LOGGER.error("Zero probability observation");
+//            return DDleaf.getDD(Float.NaN);
+//        }
+//
+//		b_p = DDOP.div(b_p, prob);
+//
+//		return b_p;
+//    }
+
+    public static int getAction(final IPOMDP agentI, DD belief) {
+
+        var scanner = new Scanner(System.in);
+
+        var factors = DDOP.factors(belief, agentI.i_S());
+        System.out.println("Current belief");
+        for (var d: factors)
+            System.out.println(d);
+        System.out.println("End current belief");
+        System.out.println();
+
+        System.out.println("Actions:");
+        for (int a = 0; a < agentI.A().size(); a++)
+            System.out.println(String.format("%s: %s", a, agentI.A().get(a)));
+        System.out.print("Enter action index: ");
+
+        int act = Integer.parseInt(scanner.nextLine());
+
+        return act;
+    }
 
     public static void runMultiAgentInteraction(Simulator sim,
             final IPOMDP agentI,
@@ -56,8 +200,7 @@ public class RunSim {
             // get optimal actions
             var optActI = agentIPolicy.getBestActionIndex(
                     iBelief);
-            var optActJ = agentJPolicy.getBestActionIndex(
-                    jBelief);
+            var optActJ = getAction((IPOMDP) agentJ, jBelief);
 
             // step the simulator
             var observations = sim.step(optActI, optActJ);
@@ -84,9 +227,7 @@ public class RunSim {
 
         opt.addOption("h", false, "print help");
         opt.addOption("biased", false, "model biased attacker");
-        opt.addOption("unmodeled", false, "recompute policy for conf bias");
         opt.addOption("o", true, "dir containing serialized models");
-        opt.addOption("r", true, "results dir");
         opt.addOption("iBel", true, 
                 "name of the initial belief DD of agent i");
         opt.addOption("jBel", true, 
@@ -107,18 +248,10 @@ public class RunSim {
             System.exit(0);
         }
 
-        boolean unmodeled = false;
-
         if (line.hasOption("biased"))
             Global.MODEL_BIASED = true;
 
-        if (line.hasOption("unmodeled"))
-            unmodeled = true;
-
         String serializedDir = line.getOptionValue("o");
-        String resultsDir = line.getOptionValue("r");
-
-        Global.RESULTS_DIR = Path.of(resultsDir);
 
         String iName = line.getOptionValue("iName");
         String iBel = line.getOptionValue("iBel");
@@ -211,15 +344,6 @@ public class RunSim {
                 _jModel.getECDDFromMjDD(b_j) : b_j;
             var s = jDDs.get(jDDs.size() - 1);
 
-            // Solve unmodeled confirmation bias for agent J
-            if (unmodeled) {
-                Global.MODEL_BIASED = true;
-                jModel.setBiased();
-                jPolicy = new SymbolicPerseusSolver<>(jModel)
-                    .solve(List.of(b_j), 100, 20);
-            }
-
-
             if (b_i == null) {
                 LOGGER.error("Belief DD %s does not exist", iBel);
                 System.exit(-1);
@@ -246,14 +370,6 @@ public class RunSim {
                 var recorder = new SimulationSerializer(model, jModel);
                 runMultiAgentInteraction(sim, model, jModel, p, jPolicy, 
                         s, b_i, b_j, l, recorder);
-
-                // Write the interaction to a file
-                if (Global.RESULTS_DIR != null) {
-                    String fileName = String.format("%s/trace.%s.%s.json", 
-                            Global.RESULTS_DIR, jName[j], n);
-                    LOGGER.info("Recording interaction %s to %s", n, fileName);
-                    Utils.writeJsonToFile(recorder.recorder, fileName);
-                }
 
                 if (n % 50 == 0)
                     System.gc();
