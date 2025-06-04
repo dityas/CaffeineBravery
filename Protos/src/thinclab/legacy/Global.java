@@ -54,7 +54,7 @@ public class Global {
 	public static TypedCacheMap<Tuple3<DD, DD, HashSet<Integer>>, Float> dotProductCache = new TypedCacheMap<>(10000);
 
 	// random number generator
-	public static Random random = new Random();
+	public static Random random = new Random(1234l);
 
 	public static final boolean DEBUG = false;
 

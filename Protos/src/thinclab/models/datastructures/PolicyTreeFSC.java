@@ -286,6 +286,7 @@ public class PolicyTreeFSC {
 
         // Populate belief deck with initial beliefs
         var beliefQueue = new ArrayDeque<Tuple3<DD, Integer, Integer>>();
+        int currentNodeNum = 0;
 
         for (var b: beliefs)
             beliefQueue.addLast(Tuple.of(b, 0, nextNodeId()));
@@ -329,6 +330,9 @@ public class PolicyTreeFSC {
                     // to the beliefsQueue
                     var nextBelief = ipomdp.beliefUpdate(b, bestAction, obs);
                     var nextId = nextNodeId();
+
+                    // Break if it crosses some limit
+                    currentNodeNum = nextId;
                     var nextNode = Tuple.of(nextBelief, d + 1, nextId);
                     beliefQueue.addLast(nextNode);
 

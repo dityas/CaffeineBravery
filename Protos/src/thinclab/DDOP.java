@@ -866,6 +866,18 @@ public class DDOP {
         return vals;
     }
 
+    public static List<Float> getInitBeliefRegionEval(int size) {
+        /*
+         * Avoid using streams here to avoid the performance impact
+         */
+
+        var vals = new ArrayList<Float>(size);
+        for (int i = 0; i < size; i++)
+            vals.add(0.0f);
+
+        return vals;
+    }
+
     // Get evaluation difference between two policies
     public static List<Float> getBeliefRegionEvalDiff(Collection<DD> B,
             AlphaVectorPolicy p1, AlphaVectorPolicy p2) {

@@ -120,12 +120,13 @@ ExplorationStrategy<M> {
             return exploredSpace;
 
         int numIter = maxI;
-        while ((maxI-- > 0) && exploredSpace.getNodeCount() < maxB) {
+        for (var b: bs) {
+            while ((maxI-- > 0) && exploredSpace.getNodeCount() < maxB) {
 
-            // sample a random initial belief and explore a path
-            // into the belief region from there
-            var b = bs.get(Global.random.nextInt(bs.size()));
-            runTrace(b, m, T, exploredSpace);
+                // sample a random initial belief and explore a path
+                // into the belief region from there
+                runTrace(b, m, T, exploredSpace);
+            }
         }
 
         LOGGER.info("After %s iterations of length %s, " +

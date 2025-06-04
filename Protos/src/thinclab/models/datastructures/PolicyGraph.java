@@ -144,11 +144,13 @@ public class PolicyGraph implements Jsonable, Serializable {
                 var i = Vn.getBestVectorIndex(b);
                 var v = Vn.get(i);
                 var bestAction = v.getActId();
-                LOGGER.info("At node %s for action %s with value %s",
-                        i, m.A().get(bestAction), DDOP.dotProduct(v.getVector(), b, m.i_S()));
 
                 if (nodeMap.containsKey(i))
                     continue;
+
+                LOGGER.info("At node %s for action %s with value %s",
+                        i, m.A().get(bestAction),
+                        DDOP.dotProduct(v.getVector(), b, m.i_S()));
 
                 // Make policy node
                 var n = new PolicyNode(i, bestAction, m.A().get(bestAction));

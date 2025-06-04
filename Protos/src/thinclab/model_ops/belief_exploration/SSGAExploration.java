@@ -60,6 +60,9 @@ public class SSGAExploration
     public boolean isUniqueBelief(DD b, 
             Collection<DD> beliefs, float minDist) {
 
+        if (beliefs.size() == 0)
+            return true;
+
         var _minDist = getMinDistance(b, beliefs);
         if (_minDist >= minDist)
             return true;
@@ -155,8 +158,7 @@ public class SSGAExploration
                         if (b_ == null)
                             b_ = m.beliefUpdate(b, _edge._0(), _edge._1());
 
-                        var dist = getMinDistance(b_, g.getAllNodes());
-                        if (dist > 0.01f)
+                        if (isUniqueBelief(b_, g.getAllNodes(), 0.01f))
                             g.addEdge(b, _edge, b_);
 
                         b = b_;
