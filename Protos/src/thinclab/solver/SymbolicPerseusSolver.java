@@ -84,6 +84,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
 
         var newVn = new AlphaVectorPolicy(m.i_S());
         this.usedBeliefs = 0;
+        beliefSamplingWeights = DDOP.getBeliefRegionEvalDiff(B, UB, Vn);
 
         while (true && newVn.size() <= 60) {
 
@@ -130,7 +131,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
             this.usedBeliefs++;
         }
 
-        beliefSamplingWeights = DDOP.getBeliefRegionEvalDiff(B, newVn, Vn);
+        //beliefSamplingWeights = DDOP.getBeliefRegionEvalDiff(B, newVn, Vn);
         return newVn;
     }
 
@@ -265,7 +266,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
 
         for (int i = 0; i < 3; i++) {
 
-            var Vn = solveSSGA(b_is, I, H);
+            var Vn = solveOnce(b_is, I, H);
             float val = evalPolicy(b_is, Vn);
 
             if (val > bestVal) {
