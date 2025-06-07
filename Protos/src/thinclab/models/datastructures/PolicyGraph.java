@@ -262,8 +262,8 @@ public class PolicyGraph implements Jsonable, Serializable {
         if(PolicyGraph.verify(m, b_is, G, p, 10, 100))
             return G;
 
-        var t = new PolicyTreeFSC(b_is, m, p, 8);
-        G.convertToTree(t, m);
+//        var t = new PolicyTreeFSC(b_is, m, p, 8);
+//        G.convertToTree(t, m);
         return G;
     }
 

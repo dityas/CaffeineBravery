@@ -19,7 +19,6 @@ import thinclab.DDOP;
 import thinclab.legacy.DD;
 import thinclab.legacy.Global;
 import thinclab.model_ops.belief_exploration.MDPExploration;
-import thinclab.model_ops.belief_exploration.SSGAExploration;
 import thinclab.models.PBVISolvablePOMDPBasedModel;
 import thinclab.models.IPOMDP.IPOMDP;
 import thinclab.models.datastructures.ReachabilityGraph;
@@ -246,7 +245,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
         for (var b: B) {
 //            var vec = Vn.getBestVectorIndex(b);
 //            totalVal += DDOP.dotProduct(Vn.get(vec).getVector(), b, m.i_S());
-            var val = evalPolicyRollout(b, Vn, 100, 10);
+            var val = evalPolicyRollout(b, Vn, 200, 10);
             LOGGER.debug("Rollout from start belief returned %s", val);
 
             totalVal += val;
@@ -278,126 +277,6 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
         }
 
         return bestPolicy;
-    }
-
-    public AlphaVectorPolicy solveSSGA(final List<DD> b_is, int I, int H) {
-
-        exitIfBeliefsInvalid(b_is);
-
-        // initialize lower bound as the reward function
-        Vn = AlphaVectorPolicy.getLowerBound(m);
-
-        var lbVals = b_is.stream()
-            .map(b -> DDOP.bestAlphaWithValue(Vn, b))
-            .map(v -> Tuple.of(m.A().get(v._0().getActId()), v._1()))
-            .collect(Collectors.toList());
-        LOGGER.info("LB evaulates initial beliefs at %s", lbVals);
-
-        Vn = solveOnceForPolicy(b_is, Vn, 0.9f, I, H);
-        Vn = solveOnceForPolicy(b_is, Vn, 0.5f, I, H);
-        Vn = solveOnceForPolicy(b_is, Vn, 0.1f, I, H);
-
-        return Vn;
-
-    }
-
-
-    public AlphaVectorPolicy solveOnceForPolicy(final List<DD> b_is,
-            final AlphaVectorPolicy Vn_i, float explorationProb,
-            int I, int H) {
-
-        if (b_is.size() < 1) {
-            LOGGER.error("[!] No initial beliefs. Returning upper bound");
-            return UB;
-        }
-
-        var lbVals = b_is.stream()
-            .map(b -> DDOP.bestAlphaWithValue(Vn_i, b))
-            .map(v -> Tuple.of(m.A().get(v._0().getActId()), v._1()))
-            .collect(Collectors.toList());
-        LOGGER.info("Vn evaulates initial beliefs at %s", lbVals);
-
-        // Start Perseus
-        LOGGER.info("[*] Launching symbolic Perseus solver for model %s", 
-                m.getName());
-
-        exitIfBeliefsInvalid(b_is);
-
-        // Belief exploration based on QMDP approximation
-        var ES = new SSGAExploration<M>(Vn_i, explorationProb);
-        LOGGER.info("[+] Starting with exploration probability %s and %s initial beliefs", 
-                explorationProb, b_is.size());
-
-        // get explored belief space
-        var exploredSpace = ES.explore(b_is, m, H, 500);
-        var B = new ArrayList<>(exploredSpace.getAllNodes());
-
-        int convergenceCount = 0;
-        AlphaVectorPolicy Vn_p = null;
-        AlphaVectorPolicy Vn = Vn_i;
-        for (int i = 0; i < 300; i++) {
-
-            long then = System.nanoTime();
-
-            // new value function after backups
-            Vn_p = solveForB(B, Vn, exploredSpace);
-
-            // report error stats
-            float backupT = (System.nanoTime() - then) / 1000000000.0f;
-            var bellmanError = getBellmanError(B, Vn, Vn_p);
-
-            if (i % 10 == 0) {
-                LOGGER.info("i=%2d, t=%.3f sec, |Vn|=%2d, |B|=%3d/%3d, "
-                        + "bell err: %.3f",
-                        i, backupT, Vn_p.size(), usedBeliefs, B.size(),
-                        bellmanError);
-            }
-
-            // Prepare for next backup
-            Vn = Vn_p;
-
-            // Congergence check
-            if (bellmanError < 0.001 && i > 10) {
-
-                convergenceCount += 1;
-                if (convergenceCount > 9) {
-
-                    LOGGER.info("Declaring solution at Bellman error %s "
-                            + "and iteration %s", bellmanError, i);
-                    logConvergence();
-                    break;
-                }
-            }
-
-            else
-                convergenceCount = 0;
-
-            Global.clearHashtablesIfFull();
-
-        } // end iterations over I
-
-        Global.clearHashtablesIfFull();
-        m.clearBackupCache();
-        ES.clearCaches();
-        exploredSpace.removeAllNodes();
-        System.gc();
-
-        // Log exit
-        LOGGER.info("Vn contains actions %s", Vn.getActions(m));
-        var valsAtWitnesses = Vn.stream()
-            .map(v -> Tuple.of(m.A().get(v.getActId()), v.getVal()))
-            .collect(Collectors.toList());
-        LOGGER.info("Vn values at witness points are %s", valsAtWitnesses);
-        for (var v: Vn) {
-            LOGGER.info("=== Begin Alpha Vector ===");
-            LOGGER.info("a: %s", m.A().get(v.getActId()));
-            LOGGER.info("V(b): %s",
-                    DDOP.dotProduct(v.getVector(), v.getWitness(), m.i_S()));
-            LOGGER.info("=== End Alpha Vector ===");
-        }
-        LOGGER.info("[*] Finished solving %s", m.getName());
-
-        return Vn;
     }
 
     public AlphaVectorPolicy solveOnce(final List<DD> b_is, int I, int H) {
