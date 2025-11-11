@@ -21,6 +21,7 @@ import thinclab.legacy.Global;
 import thinclab.model_ops.belief_exploration.MDPExploration;
 import thinclab.models.PBVISolvablePOMDPBasedModel;
 import thinclab.models.IPOMDP.IPOMDP;
+import thinclab.models.datastructures.PolicyGraph;
 import thinclab.models.datastructures.ReachabilityGraph;
 import thinclab.policy.AlphaVector;
 import thinclab.policy.AlphaVectorPolicy;
@@ -200,7 +201,8 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
                             ipomdp.i_S());
 
                     sampledActJ = DDOP.sample(actJDist, ipomdp.i_Aj);
-                    R = DDOP.restrict(R, sampledActJ._0(), sampledActJ._1());
+                    R = DDOP.restrict(ipomdp.jointR.get(act),
+                            sampledActJ._0(), sampledActJ._1());
                 }
 
                 reward += DDOP.dotProduct(R, state, state.getVars());
@@ -238,13 +240,37 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
         return totalR / ((float) iter);
     }
 
+    public float evalPolicyGraph(final List<DD> B, AlphaVectorPolicy Vn) {
+
+
+        try {
+            var totalVal = 0.0f;
+            var G = PolicyGraph.makePolicyGraph(B, m, Vn);
+
+            for (var b: B) {
+
+                var FSMVal = G.evalWithRollout(m, b, Vn, 200, 10);
+                LOGGER.debug("FSM Rollout from start belief returned %s", FSMVal);
+                totalVal += FSMVal;
+            }
+
+            var policyValue = totalVal / B.size();
+            LOGGER.info("[+] V_pi(B) = %s", policyValue);
+
+            return policyValue;
+        } catch (Exception e) {
+            LOGGER.error("While running rollouts %s", e.getMessage());
+            return Float.NEGATIVE_INFINITY;
+        }
+    }
+
     public float evalPolicy(final List<DD> B, AlphaVectorPolicy Vn) {
 
 
         var totalVal = 0.0f;
+
         for (var b: B) {
-//            var vec = Vn.getBestVectorIndex(b);
-//            totalVal += DDOP.dotProduct(Vn.get(vec).getVector(), b, m.i_S());
+
             var val = evalPolicyRollout(b, Vn, 200, 10);
             LOGGER.debug("Rollout from start belief returned %s", val);
 
@@ -266,7 +292,7 @@ SymbolicPerseusSolver<M extends PBVISolvablePOMDPBasedModel>
         for (int i = 0; i < 3; i++) {
 
             var Vn = solveOnce(b_is, I, H);
-            float val = evalPolicy(b_is, Vn);
+            float val = evalPolicyGraph(b_is, Vn);
 
             if (val > bestVal) {
                 LOGGER.info("V_pi'(B) = %s > V_pi(B) = %s. Replacing", val, bestVal);

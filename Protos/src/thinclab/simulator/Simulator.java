@@ -52,14 +52,11 @@ public class Simulator {
         this.transition = transition;
         this.observationI = obsI;
         this.observationJ = obsJ;
-        LOGGER.info("Initialized simulator");
     }
 
     // Set simulator state
     public void setState(DD state) {
         this.state = state;
-        LOGGER.info("Initial state set to %s", 
-                DDOP.factors(state, stateIndices));
     }
 
     public DD getState() {

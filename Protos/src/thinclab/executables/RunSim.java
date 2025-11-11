@@ -25,6 +25,7 @@ import thinclab.models.IPOMDP.MjRepr;
 import thinclab.models.datastructures.ReachabilityNode;
 import thinclab.policy.AlphaVectorPolicy;
 import thinclab.policy.BoltzmannExplorationPolicy;
+import thinclab.policy.EpsilonOptimalPolicy;
 import thinclab.simulator.SimulationSerializer;
 import thinclab.simulator.Simulator;
 import thinclab.solver.SymbolicPerseusSolver;
@@ -201,7 +202,7 @@ public class RunSim {
                 .map(_p -> _p.Vn).get();
 
             if (confidence != null)
-                jPolicy = new BoltzmannExplorationPolicy(
+                jPolicy = new EpsilonOptimalPolicy(
                         jPolicy, jPolicy.stateIndices, Float.parseFloat(confidence),
                         jModel.A.size());
 
@@ -242,17 +243,21 @@ public class RunSim {
             for (int n = 0; n < i; n++) {
                 LOGGER.info("Running interaction %s", n);
 
-                // For recording the interaction
-                var recorder = new SimulationSerializer(model, jModel);
-                runMultiAgentInteraction(sim, model, jModel, p, jPolicy, 
-                        s, b_i, b_j, l, recorder);
+                try {
+                    // For recording the interaction
+                    var recorder = new SimulationSerializer(model, jModel);
+                    runMultiAgentInteraction(sim, model, jModel, p, jPolicy, 
+                            s, b_i, b_j, l, recorder);
 
-                // Write the interaction to a file
-                if (Global.RESULTS_DIR != null) {
-                    String fileName = String.format("%s/trace.%s.%s.json", 
-                            Global.RESULTS_DIR, jName[j], n);
-                    LOGGER.info("Recording interaction %s to %s", n, fileName);
-                    Utils.writeJsonToFile(recorder.recorder, fileName);
+                    // Write the interaction to a file
+                    if (Global.RESULTS_DIR != null) {
+                        String fileName = String.format("%s/trace.%s.%s.json", 
+                                Global.RESULTS_DIR, jName[j], n);
+                        LOGGER.info("Recording interaction %s to %s", n, fileName);
+                        Utils.writeJsonToFile(recorder.recorder, fileName);
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("Error while running sim %s: %s", i, e);
                 }
 
                 if (n % 50 == 0)

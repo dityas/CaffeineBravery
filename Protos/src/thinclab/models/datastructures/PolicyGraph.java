@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.stream.Collectors;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import com.google.gson.GsonBuilder;
@@ -20,7 +22,10 @@ import thinclab.DDOP;
 import thinclab.legacy.DD;
 import thinclab.legacy.Global;
 import thinclab.models.PBVISolvablePOMDPBasedModel;
+import thinclab.models.POMDP;
+import thinclab.models.IPOMDP.IPOMDP;
 import thinclab.policy.AlphaVectorPolicy;
+import thinclab.simulator.Simulator;
 import thinclab.solver.SymbolicPerseusSolver;
 import thinclab.utils.Jsonable;
 import thinclab.utils.Tuple;
@@ -265,6 +270,235 @@ public class PolicyGraph implements Jsonable, Serializable {
 //        var t = new PolicyTreeFSC(b_is, m, p, 8);
 //        G.convertToTree(t, m);
         return G;
+    }
+
+    public float evalIPOMDPRollout(IPOMDP m, DD initBelief,
+            AlphaVectorPolicy Vn, int iter, int len) {
+
+        float totalR = 0.0f;
+        int printIter = (int) (iter / 10);
+
+        for (int i = 0; i < iter; i++) {
+
+            var oppModelIdx = Global.random.nextInt(m.framesj.size());
+            var oppFrame = m.ecThetas.get(oppModelIdx);
+            var oppBeliefs = oppFrame.jBeliefs;
+            var oppStartBelief = oppBeliefs.get(
+                    Global.random.nextInt(oppBeliefs.size()));
+            var oppGraph = oppFrame.G;
+            var oppVn = oppFrame.Vn;
+            var oppModel = oppFrame.m;
+
+            var oppNode = oppGraph.nodeMap.get(
+                    oppVn.getBestVectorIndex(oppStartBelief));
+
+            var sampledState = DDOP.sample(List.of(initBelief), m.i_S());
+            DD state = DDOP.ddFromVals(sampledState._0(), sampledState._1());
+            DD currentBelief = initBelief;
+            var node = nodeMap.get(Vn.getBestVectorIndex(initBelief));
+
+            float reward = 0.0f;
+
+            var stateIndices = new ArrayList<>(m.i_S());
+            stateIndices.remove(stateIndices.size() - 1);
+
+            state = DDOP.addMultVarElim(List.of(state),
+                    List.of(m.i_EC));
+
+            var sim = new Simulator(stateIndices, m.i_A, oppModel.i_A,
+                    m.i_Om_p, oppModel.i_Om_p, m.T(), m.O(), oppModel.O());
+            sim.setState(state);
+
+            for (int l = 0; l < len; l++) {
+
+                int act = node.actId;
+                var R = m.jointR.get(act);
+
+                var actJ = oppNode.actId;
+                R = DDOP.restrict(R, List.of(oppModel.i_A), List.of(actJ));
+
+                reward += DDOP.dotProduct(R, sim.state, sim.stateIndices);
+
+                // update state
+                var obs = sim.step(act, actJ);
+//                var factors = new ArrayList<>(m.T().get(act));
+//                factors.add(state);
+//
+//                var s_p = DDOP.addMultVarElim(factors, m.i_S());
+//                s_p = DDOP.restrict(s_p, List.of(oppModel.i_A), List.of(actJ));
+//
+//                s_p = DDOP.primeVars(s_p, -(Global.NUM_VARS / 2));
+//
+//                var nextState = DDOP.sample(List.of(s_p), m.i_S());
+//                state = DDOP.ddFromVals(nextState._0(), nextState._1());
+//
+//                // get obs
+//                var obsFn = m.O().get(act);
+//                obsFn = DDOP.restrict(obsFn, List.of(oppModel.i_A), List.of(actJ));
+//
+//                var obsFactors = new ArrayList<>(obsFn);
+//                obsFactors.add(DDOP.primeVars(state, (Global.NUM_VARS / 2)));
+//
+//                var obsDist = DDOP.addMultVarElim(obsFactors, m.i_S_p());
+//                var o = DDOP.sample(List.of(obsDist), m.i_Om_p());
+                
+                currentBelief = m.beliefUpdate(currentBelief, act, obs._0()._1());
+                node = getNextNode(node.nodeId, act, obs._0()._1());
+                oppNode = oppGraph.getNextNode(oppNode.nodeId, actJ, obs._1()._1());
+                if (node == null || oppNode == null) {
+                    LOGGER.error("FSM broke after observing %s, %s in %s with belief %s",
+                            obs._0().toJson(),
+                            obs._1().toJson(),
+                            DDOP.toJson(state, new ArrayList<>(state.getVars())),
+                            DDOP.toJson(currentBelief, m.i_S()));
+                    break;
+                }
+            }
+
+            if (i % printIter == 0)
+                LOGGER.debug("Got reward %s against %s", reward, oppModel.getName());
+
+            totalR += reward;
+        }
+
+        return totalR / ((float) iter);
+    }
+
+    public float evalPOMDPRollout(POMDP m, DD initBelief,
+            AlphaVectorPolicy Vn, int iter, int len) {
+
+        float totalR = 0.0f;
+
+        for (int i = 0; i < iter; i++) {
+
+            var sampledState = DDOP.sample(List.of(initBelief), m.i_S());
+            DD state = DDOP.ddFromVals(sampledState._0(), sampledState._1());
+            DD currentBelief = initBelief;
+            var node = nodeMap.get(Vn.getBestVectorIndex(initBelief));
+
+            float reward = 0.0f;
+
+            for (int l = 0; l < len; l++) {
+
+                int act = node.actId;
+                var R = m.R().get(act);
+
+                reward += DDOP.dotProduct(R, state, state.getVars());
+
+                // update state
+                var factors = new ArrayList<>(m.T().get(act));
+                factors.add(state);
+
+                var s_p = DDOP.addMultVarElim(factors, m.i_S());
+                s_p = DDOP.primeVars(s_p, -(Global.NUM_VARS / 2));
+
+                var nextState = DDOP.sample(List.of(s_p), m.i_S());
+                state = DDOP.ddFromVals(nextState._0(), nextState._1());
+
+                // get obs
+                var obsFn = m.O().get(act);
+                var obsFactors = new ArrayList<>(obsFn);
+                obsFactors.add(DDOP.primeVars(state, (Global.NUM_VARS / 2)));
+
+                var obsDist = DDOP.addMultVarElim(obsFactors, m.i_S_p());
+                var o = DDOP.sample(List.of(obsDist), m.i_Om_p());
+                
+                currentBelief = m.beliefUpdate(currentBelief, act, o._1());
+                node = getNextNode(node.nodeId, act, o._1());
+                if (node == null) {
+                    LOGGER.error("FSM broke after observing %s is %s with belief %s",
+                            new Observation(o).toJson(),
+                            DDOP.toJson(state, new ArrayList<>(state.getVars())),
+                            DDOP.toJson(currentBelief, m.i_S()));
+                    break;
+                }
+            }
+
+            totalR += reward;
+        }
+
+        return totalR / ((float) iter);
+    }
+
+    public float evalWithRollout(PBVISolvablePOMDPBasedModel m, DD initBelief,
+            AlphaVectorPolicy Vn, int iter, int len) {
+
+        if (m instanceof IPOMDP ipomdp)
+            return evalIPOMDPRollout(ipomdp, initBelief, Vn, iter, len);
+
+        else return evalPOMDPRollout((POMDP) m, initBelief, Vn, iter, len);
+
+//        float totalR = 0.0f;
+//
+//        for (int i = 0; i < iter; i++) {
+//
+//            var sampledState = DDOP.sample(List.of(initBelief), m.i_S());
+//            DD state = DDOP.ddFromVals(sampledState._0(), sampledState._1());
+//            DD currentBelief = initBelief;
+//            var node = nodeMap.get(Vn.getBestVectorIndex(initBelief));
+//
+//            float reward = 0.0f;
+//
+//            if (m instanceof IPOMDP ipomdp)
+//                state = DDOP.addMultVarElim(List.of(state),
+//                        List.of(ipomdp.i_EC));
+//
+//            for (int l = 0; l < len; l++) {
+//
+//                int act = node.actId;
+//                var R = m.R().get(act);
+//
+//                Tuple<List<Integer>, List<Integer>> sampledActJ = null;
+//                if (m instanceof IPOMDP ipomdp) {
+//                    DD actJDist = DDOP.addMultVarElim(
+//                            List.of(ipomdp.PAjGivenEC, currentBelief),
+//                            ipomdp.i_S());
+//
+//                    sampledActJ = DDOP.sample(actJDist, ipomdp.i_Aj);
+//                    R = DDOP.restrict(R, sampledActJ._0(), sampledActJ._1());
+//                }
+//
+//                reward += DDOP.dotProduct(R, state, state.getVars());
+//
+//                // update state
+//                var factors = new ArrayList<>(m.T().get(act));
+//                factors.add(state);
+//
+//                var s_p = DDOP.addMultVarElim(factors, m.i_S());
+//                if (m instanceof IPOMDP ipomdp)
+//                    s_p = DDOP.restrict(s_p, sampledActJ._0(), sampledActJ._1());
+//
+//                s_p = DDOP.primeVars(s_p, -(Global.NUM_VARS / 2));
+//
+//                var nextState = DDOP.sample(List.of(s_p), m.i_S());
+//                state = DDOP.ddFromVals(nextState._0(), nextState._1());
+//
+//                // get obs
+//                var obsFn = m.O().get(act);
+//                if (m instanceof IPOMDP ipomdp)
+//                    obsFn = DDOP.restrict(obsFn, sampledActJ._0(), sampledActJ._1());
+//
+//                var obsFactors = new ArrayList<>(obsFn);
+//                obsFactors.add(DDOP.primeVars(state, (Global.NUM_VARS / 2)));
+//
+//                var obsDist = DDOP.addMultVarElim(obsFactors, m.i_S_p());
+//                var o = DDOP.sample(List.of(obsDist), m.i_Om_p());
+//                
+//                currentBelief = m.beliefUpdate(currentBelief, act, o._1());
+//                node = getNextNode(node.nodeId, act, o._1());
+//                if (node == null) {
+//                    LOGGER.error("FSM broke after observing %s is %s with belief %s",
+//                            new Observation(o).toJson(),
+//                            DDOP.toJson(state, new ArrayList<>(state.getVars())),
+//                            DDOP.toJson(currentBelief, m.i_S()));
+//                    break;
+//                }
+//            }
+//
+//            totalR += reward;
+//        }
+//
+//        return totalR / ((float) iter);
     }
 
     public static boolean verify(PBVISolvablePOMDPBasedModel m, final List<DD> B,

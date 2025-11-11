@@ -8,7 +8,6 @@
 package thinclab.policy;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
@@ -17,27 +16,28 @@ import org.apache.logging.log4j.Logger;
 
 import thinclab.DDOP;
 import thinclab.legacy.DD;
+import thinclab.legacy.Global;
 
 /*
  * @author adityas
  *
  */
-public class BoltzmannExplorationPolicy extends AlphaVectorPolicy {
+public class EpsilonOptimalPolicy extends AlphaVectorPolicy {
 
     private static final Logger LOGGER = 
-        LogManager.getFormatterLogger(BoltzmannExplorationPolicy.class);
+        LogManager.getFormatterLogger(EpsilonOptimalPolicy.class);
 
     private final float conf;
     private final int A;
 
-    public BoltzmannExplorationPolicy(List<Integer> stateIndices, float conf,
+    public EpsilonOptimalPolicy(List<Integer> stateIndices, float conf,
             int A) {
         super(stateIndices);
         this.conf = conf;
         this.A = A;
     }
 
-    public BoltzmannExplorationPolicy(Collection<AlphaVector> alphaVectors,
+    public EpsilonOptimalPolicy(Collection<AlphaVector> alphaVectors,
             List<Integer> stateIndices, float conf, int A) {
         super(alphaVectors, stateIndices);
         this.conf = conf;
@@ -47,47 +47,28 @@ public class BoltzmannExplorationPolicy extends AlphaVectorPolicy {
     @Override
     public int getBestActionIndex(DD belief) {
 
+        if (Global.random.nextFloat() > conf)
+            return super.getBestActionIndex(belief);
+
         var Q = new float[A];
         for (int q = 0; q < Q.length; q++)
             Q[q] = 0.0f;
 
-//        float max_U = Float.NEGATIVE_INFINITY;
-//        float min_U = Float.POSITIVE_INFINITY;
-//        for (var v: this) {
-//            var val = DDOP.dotProduct(belief, v.getVector(), stateIndices);
-//            int a = v.getActId();
-//
-//            if (Q[a] < val)
-//                Q[a] = val;
-//
-//            if (val > max_U)
-//                max_U = val;
-//
-//            if (val < min_U)
-//                min_U = val;
-//        }
-//
-//        // max-shift norm
-//        for (int q = 0; q < Q.length; q++) {
-//            Q[q] = (Q[q] - min_U) / (max_U - min_U + 1e-4f);
-//        }
-//
-//        // exp
-//        for (int q = 0; q < Q.length; q++) {
-//            Q[q] = (float) Math.exp(Q[q] * conf);
-//        }
+        float min_U = Float.POSITIVE_INFINITY;
         for (var v: this) {
-
             var val = DDOP.dotProduct(belief, v.getVector(), stateIndices);
-            val = (float) Math.exp(val * conf);
-
-            if (Float.isInfinite(val))
-                val = 65535f;
-
             int a = v.getActId();
 
             if (Q[a] < val)
                 Q[a] = val;
+
+            if (val < min_U)
+                min_U = val;
+        }
+
+        // shift
+        for (int q = 0; q < Q.length; q++) {
+            Q[q] = Q[q] - min_U;
         }
 
         float sum = 0f;
@@ -97,6 +78,8 @@ public class BoltzmannExplorationPolicy extends AlphaVectorPolicy {
         ArrayList<Float> Qfn = new ArrayList<Float>();
         for (int q = 0; q < Q.length; q++)
             Qfn.add(Q[q] / sum);
+
+        LOGGER.debug("Sampling from %s", Qfn);
 
         var best = DDOP.sample(Qfn);
         return best;

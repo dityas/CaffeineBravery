@@ -41,6 +41,7 @@ public class MjThetaSpace implements Frame<PolicyNode>, Serializable {
     final public PBVISolvablePOMDPBasedModel m;
     final public SymbolicPerseusSolver<PBVISolvablePOMDPBasedModel> s;
     final public AlphaVectorPolicy Vn;
+    final public List<DD> jBeliefs;
 
     final private static Logger LOGGER = 
         LogManager.getFormatterLogger(MjThetaSpace.class);
@@ -78,6 +79,7 @@ public class MjThetaSpace implements Frame<PolicyNode>, Serializable {
         else Vn = solvePolicy(b_js, m);
 
         this.G = PolicyGraph.makePolicyGraph(b_js, m, Vn);
+        jBeliefs = b_js;
 
         LOGGER.debug(
                 "Graph has %s nodes and %s node sources", 
